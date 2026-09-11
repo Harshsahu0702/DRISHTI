@@ -1,0 +1,38 @@
+[
+  {
+    "camera_id": "junction_A_camera_01",
+    "junction_id": "junction_A",
+    "junction_name": "Junction A",
+    "camera_name": "Camera 01",
+    "video_path": "dataset/junction_A/camera_01.mp4",
+    "lat": 23.710299,
+    "lng": 86.952779
+  },
+  {
+    "camera_id": "junction_A_camera_02",
+    "junction_id": "junction_A",
+    "junction_name": "Junction A",
+    "camera_name": "Camera 02",
+    "video_path": "dataset/junction_A/camera_02.mp4",
+    "lat": 23.710293,
+    "lng": 86.952695
+  },
+  {
+    "camera_id": "junction_B_camera_01",
+    "junction_id": "junction_B",
+    "junction_name": "Junction B",
+    "camera_name": "Camera 01",
+    "video_path": "dataset/junction_B/camera_01.mp4",
+    "lat": 23.713932,
+    "lng": 86.952211
+  },
+  {
+    "camera_id": "junction_B_camera_02",
+    "junction_id": "junction_B",
+    "junction_name": "Junction B",
+    "camera_name": "Camera 02",
+    "video_path": "dataset/junction_B/camera_02.mp4",
+    "lat": 23.713929,
+    "lng": 86.952144
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "plate": "WB37E1275",
+    "status": "blacklisted",
+    "reason": "Suspected traffic violation & corridor transit alert",
+    "priority": "HIGH",
+    "added_at": "2026-09-10T12:00:00Z"
+  },
+  {
+    "plate": "JH10CS2095",
+    "status": "monitored",
+    "reason": "High-frequency cross-corridor transit monitoring",
+    "priority": "MEDIUM",
+    "added_at": "2026-09-10T12:30:00Z"
+  },
+  {
+    "plate": "WB38AP4847",
+    "status": "blacklisted",
+    "reason": "Wanted / suspicious vehicle",
+    "priority": "HIGH",
+    "added_at": "2026-09-10T21:15:56.727120Z",
+    "updated_at": "2026-09-11T18:19:57.427177Z"
+  },
+  {
+    "plate": "TEST01",
+    "status": "blacklisted",
+    "reason": "SIH Demo Watchlist",
+    "priority": "HIGH",
+    "added_at": "2026-09-10T21:43:39.308636Z",
+    "updated_at": "2026-09-10T21:44:13.663508Z"
+  },
+  {
+    "plate": "DELPOPUP1",
+    "status": "blacklisted",
+    "reason": "Test Popup",
+    "priority": "LOW",
+    "added_at": "2026-09-10T22:02:46.730749Z"
+  },
+  {
+    "plate": "TESTDEL",
+    "status": "blacklisted",
+    "reason": "Testing delete popup fix",
+    "priority": "HIGH",
+    "added_at": "2026-09-10T22:05:26.335326Z"
+  },
+  {
+    "plate": "JH10DL8792",
+    "status": "blacklisted",
+    "reason": "Wanted / suspicious vehicle",
+    "priority": "HIGH",
+    "added_at": "2026-09-11T18:22:37.410760Z"
+  }
+]
