@@ -18,16 +18,46 @@ import {
 import { api, formatTimestampSec } from "../services/api";
 
 export const CameraGrid = forwardRef(function CameraGrid(
-  { cameras, onCameraSelect, selectedCameraId },
+  { cameras, onCameraSelect, selectedCameraId, isBackgroundPaused = false },
   ref
 ) {
   const videoRefs = useRef({});
   const pendingSeeks = useRef({});
+  const pausedByModalRef = useRef({});
 
   const [playingStates, setPlayingStates] = useState({});
   const [mutedStates, setMutedStates] = useState({});
   const [currentTimes, setCurrentTimes] = useState({});
   const [activeEventHighlight, setActiveEventHighlight] = useState(null);
+
+  // Pause all background CCTV videos when evidence modal opens; resume when it closes
+  useEffect(() => {
+    if (isBackgroundPaused) {
+      Object.entries(videoRefs.current).forEach(([camId, vid]) => {
+        if (vid && !vid.paused) {
+          pausedByModalRef.current[camId] = true;
+          vid.pause();
+          setPlayingStates((prev) => ({ ...prev, [camId]: false }));
+        }
+      });
+    } else {
+      const toResume = { ...pausedByModalRef.current };
+      pausedByModalRef.current = {};
+      Object.entries(toResume).forEach(([camId, wasPlaying]) => {
+        if (wasPlaying) {
+          const vid = videoRefs.current[camId];
+          if (vid && vid.paused) {
+            vid
+              .play()
+              .then(() => {
+                setPlayingStates((prev) => ({ ...prev, [camId]: true }));
+              })
+              .catch(() => {});
+          }
+        }
+      });
+    }
+  }, [isBackgroundPaused]);
 
   const cameraList = Object.values(cameras || {});
 
@@ -79,7 +109,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
 
   // Expose seekAndPlay to App.jsx through ref
   useImperativeHandle(ref, () => ({
-    seekAndPlay: (cameraId, timestampSeconds, eventLabel = "") => {
+    seekAndPlay: (cameraId, timestampSeconds, eventLabel = "", extra = {}) => {
       const vid = videoRefs.current[cameraId];
 
       if (!vid) {
@@ -93,6 +123,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
         pendingSeeks.current[cameraId] = {
           timestamp,
           eventLabel,
+          extra,
         };
       } else {
         const target = Math.min(timestamp, vid.duration || timestamp);
@@ -115,27 +146,39 @@ export const CameraGrid = forwardRef(function CameraGrid(
           });
       }
 
+      // Default bounding boxes per camera if detection doesn't supply one
+      const defaultBboxByCamera = {
+        junction_A_camera_01: { x: 38, y: 46, width: 24, height: 26 },
+        junction_A_camera_02: { x: 34, y: 48, width: 26, height: 28 },
+        junction_B_camera_01: { x: 42, y: 42, width: 22, height: 25 },
+        junction_B_camera_02: { x: 36, y: 44, width: 25, height: 27 },
+      };
+
+      const finalBbox = extra.bbox || defaultBboxByCamera[cameraId] || { x: 36, y: 44, width: 26, height: 26 };
+
       setActiveEventHighlight({
         cameraId,
         timestamp,
+        originalTimestamp: extra.originalTimestamp || timestamp + 3,
         label: eventLabel,
-        expiresAt: Date.now() + 8000,
+        plate: extra.plate || eventLabel,
+        vehicleType: extra.vehicleType || "car",
+        bbox: finalBbox,
+        expiresAt: Date.now() + 10000,
       });
 
       window.setTimeout(() => {
         setActiveEventHighlight((current) =>
-          current?.cameraId === cameraId && current?.timestamp === timestamp
-            ? null
-            : current
+          current?.cameraId === cameraId ? null : current
         );
-      }, 8000);
+      }, 10000);
 
       requestAnimationFrame(() => {
         const cardElem = document.getElementById(`camera-card-${cameraId}`);
         if (cardElem) {
           cardElem.scrollIntoView({
             behavior: "smooth",
-            block: "nearest",
+            block: "center",
             inline: "nearest",
           });
         }
@@ -269,7 +312,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
                     ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
                     : 0;
 
-                const videoUrl = api.getCameraVideoUrl(cam.id);
+                const videoUrl = api.getCameraVideoUrl(cam.id, "grid");
 
                 return (
                   <div
@@ -333,11 +376,38 @@ export const CameraGrid = forwardRef(function CameraGrid(
                         }
                       />
 
-                      {/* Evidence Highlight Badge */}
-                      {isHighlighted && (
-                        <div className="video-overlay-evidence-playing font-mono">
-                          ▶ EVIDENCE PLAYBACK
-                        </div>
+                      {/* Evidence Highlight Badge & Vehicle Target Bounding Box */}
+                      {isHighlighted && activeEventHighlight && (
+                        <>
+                          <div className="video-overlay-evidence-playing font-mono">
+                            <span className="rec-beacon-dot"></span>
+                            <span>▶ EVIDENCE PLAYBACK (SIGHTING @ T+{formatTimestampSec(activeEventHighlight.originalTimestamp || activeEventHighlight.timestamp)})</span>
+                            {activeEventHighlight.plate && (
+                              <span className="evidence-plate-tag">{activeEventHighlight.plate}</span>
+                            )}
+                          </div>
+
+                          {/* Bounding Box Highlighting the Particular Vehicle */}
+                          <div
+                            className="video-target-bounding-box"
+                            style={{
+                              left: `${activeEventHighlight.bbox?.x ?? 36}%`,
+                              top: `${activeEventHighlight.bbox?.y ?? 44}%`,
+                              width: `${activeEventHighlight.bbox?.width ?? 26}%`,
+                              height: `${activeEventHighlight.bbox?.height ?? 26}%`,
+                            }}
+                          >
+                            <div className="target-corner top-left"></div>
+                            <div className="target-corner top-right"></div>
+                            <div className="target-corner bottom-left"></div>
+                            <div className="target-corner bottom-right"></div>
+                            <div className="target-label-plate font-mono">
+                              <span className="target-aim-crosshair">⌖</span>
+                              <span>TARGET: {activeEventHighlight.plate || "DETECTED VEHICLE"}</span>
+                            </div>
+                            <div className="target-pulse-scanline"></div>
+                          </div>
+                        </>
                       )}
 
                       {/* Timestamp Overlay */}

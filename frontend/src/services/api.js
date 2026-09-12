@@ -1,13 +1,16 @@
 /**
  * frontend/src/services/api.js
  *
- * Backend-first API client for DRISHTI-X Traffic Intelligence System.
+ * Backend-first API client for DRISHTI Traffic Intelligence System.
  * All data flows from the backend (which reads from detections.json).
  * Local JSON fallback is used only when backend is offline.
  */
 
 export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== "undefined" && window.location.hostname
+    ? `http://${window.location.hostname}:8000`
+    : "http://127.0.0.1:8000");
 
 /* =========================================================
    BACKEND REQUEST
@@ -690,6 +693,51 @@ export const api = {
   },
 
   /* -------------------------------------------------------
+     TECHNICAL VALIDATION & ADVANCED ANALYTICS (SIH PS 26127)
+  ------------------------------------------------------- */
+
+  getSystemValidation: async () => {
+    try {
+      return await request("/api/system/validation");
+    } catch (error) {
+      console.warn("[System Validation] Backend unavailable:", error);
+      return null;
+    }
+  },
+
+  getTrafficTimeseries: async (interval = "15s") => {
+    try {
+      return await request(`/api/traffic/timeseries?interval=${encodeURIComponent(interval)}`);
+    } catch (error) {
+      return null;
+    }
+  },
+
+  getTrafficHeatmap: async () => {
+    try {
+      return await request("/api/traffic/heatmap");
+    } catch (error) {
+      return null;
+    }
+  },
+
+  getObservations: async (limit = 100) => {
+    try {
+      return await request(`/api/observations?limit=${limit}`);
+    } catch (error) {
+      return [];
+    }
+  },
+
+  reviewPlateDetection: async (detectionId, correctedPlate, notes = "") => {
+    return await request(`/api/detections/${encodeURIComponent(detectionId)}/review`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ corrected_plate: correctedPlate, reviewer_notes: notes }),
+    });
+  },
+
+  /* -------------------------------------------------------
      PLATE IMAGE
   ------------------------------------------------------- */
 
@@ -703,11 +751,14 @@ export const api = {
       : null,
 
   /* -------------------------------------------------------
-     CAMERA VIDEO
+     CAMERA VIDEO & EVIDENCE
   ------------------------------------------------------- */
 
-  getCameraVideoUrl: (cameraId) =>
-    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/video`,
+  getCameraVideoUrl: (cameraId, quality = "high") =>
+    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/video${quality !== "high" ? `?quality=${quality}` : ""}`,
+
+  getEvidenceClipUrl: (cameraId, timestamp, preRoll = 5, duration = 15) =>
+    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/evidence?timestamp=${timestamp}&pre_roll=${preRoll}&duration=${duration}`,
 
   /* -------------------------------------------------------
      MAP BACKGROUND

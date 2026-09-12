@@ -33,11 +33,13 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
       list = list.filter((v) => v.has_plate);
     } else if (filter === "junction_A") {
       list = list.filter((v) =>
+        (v.junctions || []).includes("Vivekananda Sarani") ||
         (v.junctions || []).includes("Junction A") ||
         (v.cameras || []).some((c) => c.startsWith("junction_A"))
       );
     } else if (filter === "junction_B") {
       list = list.filter((v) =>
+        (v.junctions || []).includes("Kanyapur Link Road") ||
         (v.junctions || []).includes("Junction B") ||
         (v.cameras || []).some((c) => c.startsWith("junction_B"))
       );
@@ -140,7 +142,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
               setPage(1);
             }}
           >
-            Junction A
+            Vivekananda Sarani
           </button>
           <button
             type="button"
@@ -150,7 +152,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
               setPage(1);
             }}
           >
-            Junction B
+            Kanyapur Link Road
           </button>
 
           {/* Vehicle Class Dropdown */}

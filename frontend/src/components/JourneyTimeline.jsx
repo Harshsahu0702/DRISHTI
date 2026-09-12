@@ -73,11 +73,32 @@ export function JourneyTimeline({ selectedVehicle, onPlayEvent, onFocusCamera })
                   type="button"
                   className="node-play-event-btn font-mono"
                   onClick={() => {
+                    const targetPlate =
+                      event.plate ||
+                      event.raw_plate ||
+                      selectedVehicle?.plate ||
+                      selectedVehicle?.plate_number ||
+                      selectedVehicle?.normalized_plate ||
+                      selectedVehicle?.global_vehicle_id ||
+                      "";
+
                     if (onPlayEvent) {
                       onPlayEvent(
                         cameraId,
                         timestamp,
-                        `${selectedVehicle.plate || selectedVehicle.global_vehicle_id} @ ${cameraId}`
+                        `${targetPlate || "Target"} @ ${cameraId}`,
+                        {
+                          plate: targetPlate,
+                          plate_number: targetPlate,
+                          plate_image: event.plate_image || event.plate_image_url,
+                          vehicle_type: event.vehicle_type || selectedVehicle?.vehicle_type || "car",
+                          confidence: event.ocr_confidence,
+                          isBlacklisted: Boolean(
+                            selectedVehicle?.is_blacklisted ||
+                            selectedVehicle?.isBlacklisted ||
+                            selectedVehicle?.is_active
+                          ),
+                        }
                       );
                     }
                     if (onFocusCamera) {

@@ -1,39 +1,49 @@
-import React, { useState, useEffect } from "react";
-import { Radio, Clock, Shield, Cpu, Zap, Activity, BarChart3 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Shield, BarChart3, ShieldAlert, PowerOff, X, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { DrishtiEyeLogo } from "./DrishtiEyeLogo";
 
 export function Header({
-  systemHealth,
-  camerasCount,
-  isBackendOnline,
-  isDbOnline,
   onOpenAddBlacklist,
   activeTab = "surveillance",
   onSelectTab,
+  activeAlertVehicles = [],
+  onDeactivateVehicle,
+  onGoToBlacklist,
+  onSelectVehicle,
 }) {
-  const [timeStr, setTimeStr] = useState("");
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const alertContainerRef = useRef(null);
 
+  // Close popover on outside click
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTimeStr(
-        now.toLocaleTimeString("en-GB", {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-      );
+    function handleClickOutside(event) {
+      if (
+        alertContainerRef.current &&
+        !alertContainerRef.current.contains(event.target)
+      ) {
+        setIsAlertOpen(false);
+      }
+    }
+    if (isAlertOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
     };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  }, [isAlertOpen]);
+
+  const hasActiveAlerts = Boolean(activeAlertVehicles && activeAlertVehicles.length > 0);
 
   return (
     <header className="command-header">
-      {/* LEFT: DRISHTI-X Logo & Brand Identity */}
-      <div className="header-brand-nexus">
+      {/* LEFT: DRISHTI Logo & Brand Identity (Clicking opens System Validation & Empirical Benchmark) */}
+      <div
+        className="header-brand-nexus header-brand-nexus-clickable"
+        onClick={() => onSelectTab && onSelectTab(activeTab === "validation" ? "surveillance" : "validation")}
+        title="Click DRISHTI Logo to view Technical System Validation & Empirical Benchmarks"
+        role="button"
+        tabIndex={0}
+      >
         {/* Futuristic Eye Symbol */}
         <div className="header-drishti-logo-slot">
           <DrishtiEyeLogo size={42} animated={true} />
@@ -42,11 +52,11 @@ export function Header({
         <div className="brand-text-block">
           <div className="brand-primary-row">
             <h1 className="brand-core-title">
-              DRISHTI<span className="brand-core-x">-X</span>
+              DRISHTI
             </h1>
-            <span className="brand-tagline-badge">
-              Detect • Identify • Re-Identify • Trace
-            </span>
+            {activeTab === "validation" && (
+              <span className="brand-val-active-tag">SYSTEM VALIDATION</span>
+            )}
           </div>
           <div className="brand-sub-descriptor">
             City-Wide Visual Intelligence for Vehicle Tracking & Mobility Analysis
@@ -80,8 +90,128 @@ export function Header({
         </nav>
       )}
 
-      {/* RIGHT: Operational Telemetry Bar & Action Button */}
+      {/* RIGHT: Action Button & Constant Alert */}
       <div className="header-status-strip">
+        {/* CONSTANT ALERT ICON (SHOWN ONLY WHEN ACTIVATED BLACKLISTED VEHICLE IS DETECTED) */}
+        {hasActiveAlerts && (
+          <div className="constant-alert-container" ref={alertContainerRef}>
+            <button
+              type="button"
+              className="btn-header-constant-alert"
+              onClick={() => setIsAlertOpen((prev) => !prev)}
+              title={`CONSTANT ALERT: ${activeAlertVehicles.length} active blacklisted vehicle(s) detected on CCTV! Remains active until deactivated.`}
+              aria-label="Active Blacklist Alert"
+            >
+              <span className="alert-beacon-ring"></span>
+              <span className="alert-beacon-dot"></span>
+              <ShieldAlert size={17} className="alert-beacon-icon" />
+              <span className="alert-beacon-count">{activeAlertVehicles.length}</span>
+            </button>
+
+            {/* EXPANDABLE ALERT DETAILS POPOVER */}
+            {isAlertOpen && (
+              <div className="constant-alert-popover">
+                <div className="alert-popover-top">
+                  <div className="alert-popover-badge">
+                    <span className="alert-popover-dot"></span>
+                    <span className="alert-popover-badge-text">CONSTANT BLACKLIST ALERT</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="alert-popover-close-btn"
+                    onClick={() => setIsAlertOpen(false)}
+                    title="Close popover (Alert icon remains pinned at top)"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="alert-popover-lead">
+                  <div className="alert-popover-lead-title">
+                    <AlertTriangle size={14} />
+                    <span>Target Vehicle Sighted On CCTV</span>
+                  </div>
+                  <p className="alert-popover-lead-sub">
+                    This constant alert stays active at the top of the dashboard until the vehicle is deactivated.
+                  </p>
+                </div>
+
+                <div className="alert-popover-vehicle-list">
+                  {activeAlertVehicles.map((vehicle) => (
+                    <div
+                      key={vehicle.id || vehicle.plate_number}
+                      className="alert-popover-card"
+                    >
+                      <div className="alert-card-header">
+                        <span className="alert-plate-text">
+                          {vehicle.plate_number}
+                        </span>
+                        <span
+                          className={`alert-priority-pill priority-${(
+                            vehicle.priority || "HIGH"
+                          ).toLowerCase()}`}
+                        >
+                          {vehicle.priority || "HIGH"}
+                        </span>
+                      </div>
+
+                      <div className="alert-card-reason">
+                        {vehicle.reason || "Flagged in enforcement blacklist"}
+                      </div>
+
+                      <div className="alert-card-meta">
+                        <div className="alert-meta-line">
+                          <span className="meta-k">Location:</span>
+                          <span className="meta-v">
+                            {vehicle.last_seen?.junction_name || "Vivekananda Sarani"} • {vehicle.last_seen?.camera_name || vehicle.last_seen?.camera_code || "Camera"}
+                          </span>
+                        </div>
+                        {vehicle.detection_count > 0 && (
+                          <div className="alert-meta-line">
+                            <span className="meta-k">Occurrences:</span>
+                            <span className="meta-v">
+                              {vehicle.detection_count} CCTV detection(s) logged
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="alert-card-actions">
+                        <button
+                          type="button"
+                          className="btn-alert-card-deactivate"
+                          onClick={async () => {
+                            if (onDeactivateVehicle) {
+                              await onDeactivateVehicle(vehicle.id);
+                            }
+                          }}
+                          title="Deactivate this vehicle to dismiss the alert"
+                        >
+                          <PowerOff size={13} />
+                          <span>Deactivate</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-alert-card-manage"
+                          onClick={() => {
+                            setIsAlertOpen(false);
+                            if (onGoToBlacklist) onGoToBlacklist(vehicle.plate_number);
+                            if (onSelectVehicle) onSelectVehicle({ plate: vehicle.plate_number });
+                          }}
+                          title="View in Blacklist Management table"
+                        >
+                          <span>Manage in Blacklist ➔</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Prominent Action Button for Blacklist */}
         {onOpenAddBlacklist && (
           <button
@@ -92,54 +222,6 @@ export function Header({
             <span className="btn-add-plus">+</span> Add Blacklisted Vehicle
           </button>
         )}
-
-        {/* MySQL Database Status */}
-        <div className="header-metric-pill">
-          <span className={`status-dot-pulse ${isDbOnline ? "status-dot-green" : "status-dot-amber"}`}></span>
-          <div>
-            <div className="pill-label">Database</div>
-            <div className="pill-val">
-              {isDbOnline ? (
-                <span className="text-status-green">MySQL 8.0 (Active)</span>
-              ) : (
-                <span className="text-status-amber">JSON Fallback</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Core System Status */}
-        <div className="header-metric-pill">
-          <span className="status-dot-pulse"></span>
-          <div>
-            <div className="pill-label">Neural Engine</div>
-            <div className="pill-val">
-              {isBackendOnline ? (
-                <span className="text-status-green">ONLINE (FastAPI)</span>
-              ) : (
-                <span className="text-status-red">OFFLINE</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Camera Sensor Nodes */}
-        <div className="header-metric-pill">
-          <Radio size={14} className="icon-telemetry text-brand" />
-          <div>
-            <div className="pill-label">Surveillance Grid</div>
-            <div className="pill-val font-mono">{camerasCount || 4} CAMS ACTIVE</div>
-          </div>
-        </div>
-
-        {/* Realtime Clock (IST) */}
-        <div className="header-metric-pill">
-          <Clock size={14} className="icon-telemetry text-muted" />
-          <div>
-            <div className="pill-label">Operational Time</div>
-            <div className="pill-val font-mono">{timeStr || "12:00:00"} <span className="time-tz">IST</span></div>
-          </div>
-        </div>
       </div>
     </header>
   );

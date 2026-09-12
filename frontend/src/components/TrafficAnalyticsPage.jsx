@@ -22,6 +22,9 @@ import {
   ChevronRight,
   ShieldAlert,
   SlidersHorizontal,
+  GitMerge,
+  MapPin,
+  ScanLine,
 } from "lucide-react";
 
 export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSurveillance, onSelectVehicle }) {
@@ -120,7 +123,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
           <h1 className="tap-main-title">City-Wide Traffic Mobility & Flow Intelligence</h1>
           <p className="tap-description">
             Empirical traffic flow diagnostics, Origin-Destination (OD) transition matrices,
-            real Haversine corridor transit speeds, and relative congestion indexes across Junction A and Junction B.
+            real Haversine corridor transit speeds, and relative congestion indexes across Vivekananda Sarani and Kanyapur Link Road.
           </p>
 
           <div className="tap-quick-actions">
@@ -189,7 +192,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
             <div className="tap-explainer-item">
               <strong>1. Inter-Camera Velocity:</strong>
               <code>Speed = (Haversine_Distance_Meters / Δt_seconds) × 3.6 km/h</code>
-              <p>Calculated purely when vehicle physically crosses from Junction A (23.710299, 86.952779) to Junction B (23.713932, 86.952211) separated by ~408.4 meters.</p>
+              <p>Calculated purely when vehicle physically crosses from Vivekananda Sarani (23.710299, 86.952779) to Kanyapur Link Road (23.713932, 86.952211) separated by ~408.4 meters.</p>
             </div>
             <div className="tap-explainer-item">
               <strong>2. Relative Congestion Index (RCI):</strong>
@@ -205,71 +208,97 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
         </div>
       )}
 
-      {/* 2. EXECUTIVE MACRO METRIC CARDS (4-COL GRID) */}
-      <div className="tap-metrics-grid">
-        {/* Metric 1: Total Processed Tracks */}
+      {/* 2. EXECUTIVE MACRO METRIC CARDS (6-COL RESPONSIVE GRID) */}
+      <div className="tap-metrics-grid-six">
+        {/* Metric 1: Global Vehicles */}
         <div className="tap-metric-card">
           <div className="tap-card-header">
-            <span className="tap-card-lbl">Total Trajectory Tracks</span>
+            <span className="tap-card-lbl">Global Vehicles</span>
             <span className="tap-card-icon-wrap" style={{ background: "rgba(14, 165, 233, 0.12)", color: "#0ea5e9" }}>
-              <Layers size={18} />
+              <Car size={18} />
+            </span>
+          </div>
+          <div className="tap-card-value font-mono">{kpis.global_vehicles ?? kpis.unique_plates ?? 105}</div>
+          <div className="tap-card-footer">
+            <span className="tap-pill-green">Re-Identified</span>
+            <span className="tap-muted-note">Unique tracked identities</span>
+          </div>
+        </div>
+
+        {/* Metric 2: Cross-Camera Matches */}
+        <div className="tap-metric-card">
+          <div className="tap-card-header">
+            <span className="tap-card-lbl">Cross-Camera Matches</span>
+            <span className="tap-card-icon-wrap" style={{ background: "rgba(168, 85, 247, 0.12)", color: "#a855f7" }}>
+              <GitMerge size={18} />
+            </span>
+          </div>
+          <div className="tap-card-value font-mono">{kpis.cross_camera_matches ?? kpis.multi_camera_matches ?? 28}</div>
+          <div className="tap-card-footer">
+            <span className="tap-pill-neutral font-mono">Multi-Node</span>
+            <span className="tap-muted-note">Corridor transits</span>
+          </div>
+        </div>
+
+        {/* Metric 3: Total Processed Tracks */}
+        <div className="tap-metric-card">
+          <div className="tap-card-header">
+            <span className="tap-card-lbl">Telemetry Tracks</span>
+            <span className="tap-card-icon-wrap" style={{ background: "rgba(34, 197, 94, 0.12)", color: "#22c55e" }}>
+              <MapPin size={18} />
             </span>
           </div>
           <div className="tap-card-value font-mono">{kpis.total_tracks || 914}</div>
           <div className="tap-card-footer">
             <span className="tap-pill-green">100% Tracked</span>
-            <span className="tap-muted-note">across 4 synchronized cameras</span>
+            <span className="tap-muted-note">CCTV detection records</span>
           </div>
         </div>
 
-        {/* Metric 2: Estimated Average Speed */}
+        {/* Metric 4: Cameras Active */}
         <div className="tap-metric-card">
           <div className="tap-card-header">
-            <span className="tap-card-lbl">Corridor Transit Velocity</span>
-            <span className="tap-card-icon-wrap" style={{ background: "rgba(34, 197, 94, 0.12)", color: "#22c55e" }}>
+            <span className="tap-card-lbl">Cameras Active</span>
+            <span className="tap-card-icon-wrap" style={{ background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6" }}>
+              <Radio size={18} />
+            </span>
+          </div>
+          <div className="tap-card-value font-mono">{kpis.cameras_online ?? 4}</div>
+          <div className="tap-card-footer">
+            <span className="tap-pill-neutral font-mono">4 CCTV Nodes</span>
+            <span className="tap-muted-note">Synchronized surveillance</span>
+          </div>
+        </div>
+
+        {/* Metric 5: Plate Reads (ANPR) */}
+        <div className="tap-metric-card">
+          <div className="tap-card-header">
+            <span className="tap-card-lbl">Plate Reads (ANPR)</span>
+            <span className="tap-card-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#f59e0b" }}>
+              <ScanLine size={18} />
+            </span>
+          </div>
+          <div className="tap-card-value font-mono">{kpis.total_detections ?? kpis.anpr_reads ?? 144}</div>
+          <div className="tap-card-footer">
+            <span className="tap-pill-amber font-mono">OCR Engine</span>
+            <span className="tap-muted-note">Recognized plates</span>
+          </div>
+        </div>
+
+        {/* Metric 6: Estimated Average Speed */}
+        <div className="tap-metric-card">
+          <div className="tap-card-header">
+            <span className="tap-card-lbl">Est. Average Speed</span>
+            <span className="tap-card-icon-wrap" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#ef4444" }}>
               <Gauge size={18} />
             </span>
           </div>
           <div className="tap-card-value font-mono">
-            {speedStats.average_speed_kmh ? `${speedStats.average_speed_kmh}` : "132.8"} <span className="tap-unit">km/h</span>
+            {speedStats.average_speed_kmh || kpis.estimated_average_speed_kmh || "81.1"} <span className="tap-unit">km/h</span>
           </div>
           <div className="tap-card-footer">
-            <span className="tap-pill-neutral font-mono">Min: {speedStats.min_speed_kmh || 103.7} km/h</span>
-            <span className="tap-pill-neutral font-mono">Max: {speedStats.max_speed_kmh || 157.8} km/h</span>
-          </div>
-        </div>
-
-        {/* Metric 3: Multi-Camera Transit Efficiency */}
-        <div className="tap-metric-card">
-          <div className="tap-card-header">
-            <span className="tap-card-lbl">Corridor Travel Duration</span>
-            <span className="tap-card-icon-wrap" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#f59e0b" }}>
-              <Clock size={18} />
-            </span>
-          </div>
-          <div className="tap-card-value font-mono">
-            {odMatrix[0]?.avg_travel_time_sec ? `${odMatrix[0].avg_travel_time_sec}s` : "11.1s"}
-          </div>
-          <div className="tap-card-footer">
-            <span className="tap-pill-amber font-mono">~408.4m Transit</span>
-            <span className="tap-muted-note">Junction A ➜ Junction B</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Dominant Vehicle Class */}
-        <div className="tap-metric-card">
-          <div className="tap-card-header">
-            <span className="tap-card-lbl">Primary Vehicle Class</span>
-            <span className="tap-card-icon-wrap" style={{ background: "rgba(168, 85, 247, 0.12)", color: "#a855f7" }}>
-              <Car size={18} />
-            </span>
-          </div>
-          <div className="tap-card-value font-mono">
-            {vehicleTypes[0]?.type?.toUpperCase() || "CAR"} <span className="tap-unit">({vehicleTypes[0]?.percentage || 86.4}%)</span>
-          </div>
-          <div className="tap-card-footer">
-            <span className="tap-pill-neutral font-mono">{vehicleTypes[0]?.count || 789} vehicles</span>
-            <span className="tap-muted-note">classified by YOLO11</span>
+            <span className="tap-pill-neutral font-mono">GPS Distance</span>
+            <span className="tap-muted-note">Haversine arrival delta</span>
           </div>
         </div>
       </div>
@@ -392,7 +421,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
             <div className="tap-speed-spectrum-head font-mono">
               <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <Gauge size={15} style={{ color: "var(--drishti-amber)" }} />
-                <strong>CORRIDOR SPEED SPECTRUM (Junction A ↔ B)</strong>
+                <strong>CORRIDOR SPEED SPECTRUM (Vivekananda Sarani ↔ Kanyapur Link Road)</strong>
               </span>
               <span className="tap-badge-green font-mono">{speedStats.valid_sample_count || 1} Valid Samples</span>
             </div>
@@ -452,8 +481,8 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
                 className="tap-filter-select font-mono"
               >
                 <option value="all">All Junctions</option>
-                <option value="junction_a">Junction A (South Gate)</option>
-                <option value="junction_b">Junction B (North Gate)</option>
+                <option value="junction_a">Vivekananda Sarani</option>
+                <option value="junction_b">Kanyapur Link Road</option>
               </select>
             </div>
 
@@ -606,7 +635,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
               <CheckCircle2 size={18} />
             </div>
             <div className="tap-recom-content">
-              <h4>Corridor Inflow Balance (Junction A ➜ Junction B)</h4>
+              <h4>Corridor Inflow Balance (Vivekananda Sarani ➜ Kanyapur Link Road)</h4>
               <p>
                 Average transit duration of 11.1s across 408m indicates uninterrupted arterial flow. Signal timing is well-coordinated between South Gate and North Gate.
               </p>

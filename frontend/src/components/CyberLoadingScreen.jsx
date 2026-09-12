@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { DrishtiEyeLogo } from "./DrishtiEyeLogo";
 
-const TELEMETRY_STAGES = [
-  "INITIALIZING OPTICAL NEURAL PERCEPTION CORE...",
-  "CALIBRATING JUNCTION_A & JUNCTION_B CAMERA STREAMS...",
-  "LOADING YOLO11 MULTI-TASK DETECTOR & RE-ID WEIGHTS...",
-  "SYNCHRONIZING ASANSOL CORRIDOR TOPOLOGY MATRIX...",
-  "CONNECTING LICENSE PLATE ANPR EXTRACTION PIPELINE...",
-  "COMPUTING SPATIO-TEMPORAL TRAJECTORY EMBEDDINGS...",
-  "SYSTEM SECURE. LAUNCHING DRISHTI-X COMMAND MATRIX...",
+const LOADING_STAGES = [
+  "Initializing system...",
+  "Connecting camera network...",
+  "Loading vehicle records...",
+  "Preparing surveillance dashboard...",
+  "Ready",
 ];
 
 export function CyberLoadingScreen({ isExiting = false, onFinished }) {
-  const [progress, setProgress] = useState(12);
+  const [progress, setProgress] = useState(15);
   const [stageIndex, setStageIndex] = useState(0);
 
   useEffect(() => {
     const startTime = Date.now();
-    const duration = 2200; // 2.2s cinematic boot
+    const duration = 1800; // 1.8s clean smooth loading
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -25,18 +23,18 @@ export function CyberLoadingScreen({ isExiting = false, onFinished }) {
       setProgress(pct);
 
       const step = Math.min(
-        TELEMETRY_STAGES.length - 1,
-        Math.floor((pct / 100) * TELEMETRY_STAGES.length)
+        LOADING_STAGES.length - 1,
+        Math.floor((pct / 100) * LOADING_STAGES.length)
       );
       setStageIndex(step);
 
       if (pct >= 100) {
         clearInterval(interval);
         if (onFinished) {
-          setTimeout(onFinished, 300);
+          setTimeout(onFinished, 250);
         }
       }
-    }, 45);
+    }, 35);
 
     return () => clearInterval(interval);
   }, [onFinished]);
@@ -51,26 +49,21 @@ export function CyberLoadingScreen({ isExiting = false, onFinished }) {
       </div>
 
       <div className="cyber-loading-content">
-        {/* BIG CRAZY DRISHTI CYBER EYE LOGO */}
+        {/* DRISHTI EYE LOGO */}
         <div className="cyber-eye-hero-container">
           <div className="cyber-eye-halo-ring"></div>
           <div className="cyber-eye-halo-pulse"></div>
-          <DrishtiEyeLogo size={160} animated={true} className="loading-hero-eye" />
+          <DrishtiEyeLogo size={150} animated={true} className="loading-hero-eye" />
         </div>
 
         {/* BRAND IDENTITY */}
         <div className="cyber-brand-hero">
-          <div className="cyber-pre-title">
-            <span className="cyber-dot-indicator"></span>
-            DEFENSE-GRADE RE-IDENTIFICATION MATRIX
-          </div>
-
           <h1 className="cyber-hero-title">
-            DRISHTI<span className="cyber-hero-x">-X</span>
+            DRISHTI
           </h1>
 
           <div className="cyber-hero-subtitle">
-            CITY-WIDE VISUAL INTELLIGENCE FOR VEHICLE TRACKING & MOBILITY ANALYSIS
+            City-Wide Visual Intelligence for Vehicle Tracking & Mobility Analysis
           </div>
         </div>
 
@@ -78,10 +71,10 @@ export function CyberLoadingScreen({ isExiting = false, onFinished }) {
         <div className="cyber-progress-assembly">
           <div className="cyber-progress-header">
             <span className="cyber-stage-text font-mono">
-              {TELEMETRY_STAGES[stageIndex]}
+              {LOADING_STAGES[stageIndex]}
             </span>
             <span className="cyber-pct-readout font-mono">
-              {progress.toString().padStart(3, "0")}%
+              {progress}%
             </span>
           </div>
 
@@ -92,17 +85,6 @@ export function CyberLoadingScreen({ isExiting = false, onFinished }) {
             >
               <div className="cyber-progress-head-glint"></div>
             </div>
-          </div>
-
-          {/* Sub-telemetry readout */}
-          <div className="cyber-telemetry-specs font-mono">
-            <span>CORE: YOLO11 + ReID</span>
-            <span>•</span>
-            <span>NODES: 4/4 ACTIVE</span>
-            <span>•</span>
-            <span>LATENCY: 4.2ms</span>
-            <span>•</span>
-            <span>FREQ: 10 FPS</span>
           </div>
         </div>
       </div>

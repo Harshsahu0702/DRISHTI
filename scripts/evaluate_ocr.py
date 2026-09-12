@@ -2,7 +2,7 @@
 """
 scripts/evaluate_ocr.py
 
-Rigorous OCR & ANPR Accuracy Evaluation Utility for DRISHTI-X.
+Rigorous OCR & ANPR Accuracy Evaluation Utility for DRISHTI.
 Compares predicted plate strings from detections.json against an optional
 ground-truth annotation dataset.
 
@@ -142,7 +142,7 @@ def evaluate_ocr(ground_truth_path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate OCR accuracy for DRISHTI-X")
+    parser = argparse.ArgumentParser(description="Evaluate OCR accuracy for DRISHTI")
     parser.add_argument(
         "--ground-truth",
         "-g",
@@ -156,7 +156,7 @@ def main():
     result = evaluate_ocr(gt_path)
 
     print("\n=======================================================")
-    print("      DRISHTI-X OCR ACCURACY EVALUATION REPORT        ")
+    print("        DRISHTI OCR ACCURACY EVALUATION REPORT        ")
     print("=======================================================")
     if result["status"] == "not_configured":
         print(f"Status: {result['message']}")

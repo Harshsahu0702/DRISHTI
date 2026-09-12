@@ -26,6 +26,7 @@ export function BlacklistManagement({
   onStatusChangeSuccess,
   onFocusCamera,
   onPlayEvent,
+  onTraceJourney,
 }) {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,15 +107,66 @@ export function BlacklistManagement({
     }
   };
 
+  const handlePlayVehicleEvidence = async (vehicle) => {
+    if (!vehicle) return;
+    const plate =
+      vehicle.normalized_plate || vehicle.plate_number || vehicle.plate;
+
+    // 1. Check if last_seen has camera_code and timestamp_sec
+    if (vehicle.last_seen?.camera_code && vehicle.last_seen?.timestamp_sec) {
+      if (onPlayEvent) {
+        onPlayEvent(
+          vehicle.last_seen.camera_code,
+          vehicle.last_seen.timestamp_sec,
+          `${plate} @ ${vehicle.last_seen.camera_name || vehicle.last_seen.camera_code}`,
+          {
+            plate,
+            isBlacklisted: true,
+          }
+        );
+        if (onFocusCamera) onFocusCamera(vehicle.last_seen.camera_code);
+        return;
+      }
+    }
+
+    // 2. Fallback to searching vehicle journey to find recent sighting
+    try {
+      const res = await api.searchVehicles(plate);
+      if (res && res[0]?.trajectory && res[0].trajectory.length > 0) {
+        const obs = res[0].trajectory[res[0].trajectory.length - 1];
+        if (onPlayEvent && obs.camera_id) {
+          onPlayEvent(
+            obs.camera_id,
+            obs.timestamp_sec || 0,
+            `${plate} @ ${obs.camera_name || obs.camera_id}`,
+            {
+              plate,
+              plate_image: obs.plate_image || obs.plate_image_url,
+              isBlacklisted: true,
+            }
+          );
+          if (onFocusCamera) onFocusCamera(obs.camera_id);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not find sighting for evidence playback:", e);
+    }
+  };
+
   const openViewDetails = async (vehicle) => {
     setViewLoading(true);
-    setViewDetailsModal({ vehicle });
+    setViewDetailsModal({ ...vehicle, vehicle });
+    const plate = vehicle.normalized_plate || vehicle.plate_number;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/blacklist/${vehicle.id}`);
-      if (response.ok) {
-        const fullDetails = await response.json();
-        setViewDetailsModal(fullDetails);
-      }
+      const data = await api.getBlacklistEvents(plate);
+      const events = data?.events || [];
+      setViewDetailsModal((prev) => ({
+        ...prev,
+        events,
+        detection_count: events.length || prev?.detection_count || 0,
+        vehicle: { ...prev?.vehicle, events },
+      }));
     } catch (e) {
       console.warn("Failed to fetch extended blacklist details:", e);
     } finally {
@@ -170,7 +222,7 @@ export function BlacklistManagement({
   });
 
   return (
-    <div className="blacklist-management-card">
+    <div className="blacklist-management-card" id="blacklist-management-section">
       <div className="blacklist-management-header">
         <div className="blacklist-title-area">
           <div className="blacklist-section-badge">
@@ -419,6 +471,15 @@ export function BlacklistManagement({
                         >
                           <Eye size={12} style={{ display: "inline", marginRight: "3px" }} />
                           View
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-action btn-evidence"
+                          onClick={() => handlePlayVehicleEvidence(v)}
+                          title="Play CCTV Evidence video for this blacklisted target"
+                        >
+                          <Play size={11} fill="currentColor" style={{ display: "inline", marginRight: "3px" }} />
+                          Evidence
                         </button>
                         <button
                           type="button"
@@ -747,7 +808,12 @@ export function BlacklistManagement({
                                   onPlayEvent(
                                     ev.camera_code,
                                     timestampSec,
-                                    `${plateNum} @ ${ev.camera_code}`
+                                    `${plateNum} @ ${ev.camera_name || ev.camera_code}`,
+                                    {
+                                      plate: plateNum,
+                                      plate_image: ev.plate_image,
+                                      isBlacklisted: true,
+                                    }
                                   );
                                   if (onFocusCamera) onFocusCamera(ev.camera_code);
                                 }}
@@ -778,8 +844,8 @@ export function BlacklistManagement({
                 )}
               </div>
 
-              {/* Action: Trace Journey */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              {/* Action: Play Evidence & Trace Journey */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", alignItems: "center" }}>
                 <button
                   type="button"
                   className="btn-modal-cancel"
@@ -789,14 +855,42 @@ export function BlacklistManagement({
                 </button>
                 <button
                   type="button"
+                  className="btn-modal-evidence font-mono"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "#EEF2FF",
+                    color: "#4338CA",
+                    border: "1px solid #C7D2FE",
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontSize: "13px",
+                  }}
+                  onClick={() => {
+                    const v = viewDetailsModal.vehicle || viewDetailsModal;
+                    setViewDetailsModal(null);
+                    handlePlayVehicleEvidence(v);
+                  }}
+                >
+                  <Play size={12} fill="currentColor" /> Play Evidence
+                </button>
+                <button
+                  type="button"
                   className="btn-modal-submit"
                   style={{ display: "flex", alignItems: "center", gap: "6px" }}
                   onClick={() => {
                     const targetPlate =
                       viewDetailsModal.vehicle?.normalized_plate ||
-                      viewDetailsModal.vehicle?.plate_number;
+                      viewDetailsModal.vehicle?.plate_number ||
+                      viewDetailsModal.normalized_plate ||
+                      viewDetailsModal.plate_number;
                     setViewDetailsModal(null);
-                    if (onSelectVehicle && targetPlate) {
+                    if (onTraceJourney && targetPlate) {
+                      onTraceJourney(targetPlate);
+                    } else if (onSelectVehicle && targetPlate) {
                       onSelectVehicle({ plate: targetPlate });
                     }
                   }}

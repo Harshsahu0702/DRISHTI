@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Play,
@@ -73,7 +74,7 @@ export function VehicleDetailModal({
       .finally(() => setLoadingAlerts(false));
   }, [plateNumber]);
 
-  return (
+  return createPortal(
     <div className="modal-backdrop-light" onClick={onClose}>
       <div
         className="modal-dialog-panel"
@@ -402,7 +403,8 @@ export function VehicleDetailModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

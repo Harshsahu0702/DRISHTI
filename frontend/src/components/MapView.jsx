@@ -1,25 +1,17 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { MapPin, Navigation, Eye, Activity, Flame, Shield, Layers } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
-  CircleMarker,
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { api, formatTime } from "../services/api";
-
-// Fix default marker icons in Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
+import { formatTime } from "../services/api";
+import { FullMapModal } from "./FullMapModal";
 
 // Intentional Junction Coordinates
 const JUNCTION_COORDINATES = {
@@ -27,7 +19,18 @@ const JUNCTION_COORDINATES = {
   junction_B: { lat: 23.713932, lng: 86.952211 },
 };
 
+// Distinct coordinates for CCTV cameras so they are clearly spaced and visible
+const CAMERA_KNOWN_LOCATIONS = {
+  junction_A_camera_01: { lat: 23.710160, lng: 86.952620 },
+  junction_A_camera_02: { lat: 23.710440, lng: 86.952940 },
+  junction_B_camera_01: { lat: 23.713780, lng: 86.952060 },
+  junction_B_camera_02: { lat: 23.714080, lng: 86.952360 },
+};
+
 function getCameraCoordinates(cameraId, junctionId, fallbackLat, fallbackLng) {
+  if (cameraId && CAMERA_KNOWN_LOCATIONS[cameraId]) {
+    return CAMERA_KNOWN_LOCATIONS[cameraId];
+  }
   if (fallbackLat && fallbackLng && Number.isFinite(fallbackLat) && Number.isFinite(fallbackLng)) {
     return { lat: fallbackLat, lng: fallbackLng };
   }
@@ -35,11 +38,57 @@ function getCameraCoordinates(cameraId, junctionId, fallbackLat, fallbackLng) {
   return { lat: coords.lat, lng: coords.lng };
 }
 
+// Leaflet custom CCTV Camera Icon
+function createCameraIcon(camera, isSelected) {
+  const camTitle = camera.camera_name || camera.name || "CCTV";
+  return L.divIcon({
+    className: "custom-leaflet-camera-div",
+    html: `
+      <div class="leaflet-cam-icon-wrapper ${isSelected ? "selected-cam" : ""}" title="${camTitle}">
+        <div class="leaflet-cam-pulse-ring"></div>
+        <div class="leaflet-cam-icon-badge">
+          <svg class="leaflet-cam-svg" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+            <circle cx="12" cy="13" r="3"/>
+          </svg>
+        </div>
+        <div class="leaflet-cam-label">${camTitle}</div>
+      </div>
+    `,
+    iconSize: [44, 48],
+    iconAnchor: [22, 19],
+    popupAnchor: [0, -22],
+  });
+}
+
+// Leaflet custom Vehicle Location Pin Icon
+function createVehiclePinIcon(point, index, totalPoints, plate) {
+  const isLatest = index === totalPoints - 1;
+  const label = totalPoints === 1 ? (plate || "CAR") : (isLatest ? "TARGET" : `#${index + 1}`);
+
+  return L.divIcon({
+    className: "custom-leaflet-vehicle-pin-div",
+    html: `
+      <div class="leaflet-pin-wrapper ${isLatest ? "latest-pin" : ""}">
+        <div class="leaflet-pin-pulse"></div>
+        <div class="leaflet-pin-badge">${label}</div>
+        <svg class="leaflet-pin-svg" xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 24 24" fill="#DC2626" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/>
+          <circle cx="12" cy="10" r="3.2" fill="#FFFFFF"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [32, 44],
+    iconAnchor: [16, 38],
+    popupAnchor: [0, -40],
+  });
+}
+
 function MapBounds({ bounds }) {
   const map = useMap();
   useEffect(() => {
     if (bounds && bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
   }, [bounds, map]);
   return null;
@@ -51,22 +100,22 @@ export function MapView({
   selectedCameraId,
   onCameraSelect,
   analytics,
+  onPlayEvent,
+  onOpenFullMap,
 }) {
-  const [mapMode, setMapMode] = useState("trajectory"); // 'trajectory' (Mode A) or 'traffic' (Mode B)
-  const [mapModel, setMapModel] = useState(null);
+  const [isFullMapOpen, setIsFullMapOpen] = useState(false);
 
-  useEffect(() => {
-    api
-      .getMapModel()
-      .then(setMapModel)
-      .catch((error) => {
-        console.warn("Failed to load map model:", error);
-      });
-  }, []);
+  const trajectory = useMemo(() => {
+    if (!selectedVehicle) return [];
+    return (
+      selectedVehicle.trajectory ||
+      selectedVehicle.events ||
+      selectedVehicle.timeline ||
+      []
+    );
+  }, [selectedVehicle]);
 
-  const trajectory = selectedVehicle?.trajectory || [];
-
-  // Look up camera analytics for Mode B
+  // Look up camera analytics
   const cameraAnalyticsMap = useMemo(() => {
     const list = analytics?.camera_volumes || [];
     const map = {};
@@ -97,106 +146,97 @@ export function MapView({
     });
   }, [cameras, cameraAnalyticsMap]);
 
-  // Generate trajectory points for Mode A
+  // Generate vehicle trajectory points (when vehicle is selected)
   const trajectoryPoints = useMemo(() => {
-    return trajectory.map((point) => {
-      const junctionId = point.junction_id || point.junction || "junction_A";
-      const cam = cameras ? cameras[point.camera_id] : null;
-      const coords = getCameraCoordinates(
-        point.camera_id,
-        junctionId,
-        point.lat || cam?.lat,
-        point.lng || cam?.lng
-      );
-      return {
-        ...point,
-        ...coords,
-      };
-    });
-  }, [trajectory, cameras]);
-
-  // Corridor route points between Junction A and B
-  const corridorRoute = useMemo(() => {
-    if (mapModel?.route_corridor && Array.isArray(mapModel.route_corridor)) {
-      return mapModel.route_corridor;
+    if (trajectory.length > 0) {
+      return trajectory.map((point) => {
+        const junctionId = point.junction_id || point.junction || "junction_A";
+        const cam = cameras ? cameras[point.camera_id] : null;
+        const coords = getCameraCoordinates(
+          point.camera_id,
+          junctionId,
+          point.lat || cam?.lat,
+          point.lng || cam?.lng
+        );
+        return {
+          ...point,
+          ...coords,
+        };
+      });
     }
-    return [
-      [23.710299, 86.952779],
-      [23.710293, 86.952695],
-      [23.712100, 86.952500],
-      [23.713932, 86.952211],
-      [23.713929, 86.952144],
-    ];
-  }, [mapModel]);
+
+    // Single point fallback for selected vehicle
+    if (selectedVehicle) {
+      const camId =
+        selectedVehicle.last_camera_id ||
+        selectedVehicle.first_camera_id ||
+        selectedVehicle.camera_id;
+      if (camId) {
+        const cam = cameras ? cameras[camId] : null;
+        const coords = getCameraCoordinates(
+          camId,
+          selectedVehicle.junction_id || cam?.junction_id || "junction_A",
+          selectedVehicle.lat || cam?.lat,
+          selectedVehicle.lng || cam?.lng
+        );
+        return [
+          {
+            camera_id: camId,
+            camera_name: cam?.camera_name || camId,
+            ...coords,
+          },
+        ];
+      }
+    }
+
+    return [];
+  }, [trajectory, selectedVehicle, cameras]);
 
   // Calculate map bounds
   const mapBounds = useMemo(() => {
-    if (mapMode === "trajectory" && trajectoryPoints.length > 0) {
+    if (trajectoryPoints.length > 0) {
       return trajectoryPoints.map((point) => [point.lat, point.lng]);
     }
     if (cameraMarkers.length > 0) {
       return cameraMarkers.map((camera) => [camera.lat, camera.lng]);
     }
     return null;
-  }, [mapMode, trajectoryPoints, cameraMarkers]);
+  }, [trajectoryPoints, cameraMarkers]);
 
   return (
     <div className="geospatial-map-card">
-      <div className="section-header-block" style={{ marginBottom: "8px" }}>
+      <div className="section-header-block map-card-header-flex" style={{ marginBottom: "8px" }}>
         <div>
           <div className="section-eyebrow">Geospatial Intelligence</div>
           <h2 className="section-main-heading">
-            {mapMode === "trajectory"
-              ? "Vehicle Journey & Trajectory Map"
-              : "City Traffic Intelligence & Heatmap"}
+            Vehicle Journey & Trajectory Map
           </h2>
           <p className="section-subtext">
-            {mapMode === "trajectory"
-              ? "Reconstructed target route across urban CCTV nodes and highway corridor."
-              : "Live camera traffic density, relative congestion index, and corridor load distribution."}
+            Reconstructed target route across urban CCTV nodes and highway corridor.
           </p>
         </div>
 
-        {/* Dual Mode Switcher */}
-        <div className="map-mode-toggle-group">
-          <button
-            type="button"
-            className={`map-toggle-btn font-mono ${mapMode === "trajectory" ? "active" : ""}`}
-            onClick={() => setMapMode("trajectory")}
-          >
-            <Navigation size={13} />
-            MODE A: TARGET JOURNEY
-          </button>
-          <button
-            type="button"
-            className={`map-toggle-btn font-mono ${mapMode === "traffic" ? "active" : ""}`}
-            onClick={() => setMapMode("traffic")}
-          >
-            <Flame size={13} />
-            MODE B: TRAFFIC INTEL
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn-map-expand font-mono"
+          onClick={() => (onOpenFullMap ? onOpenFullMap() : setIsFullMapOpen(true))}
+          title="Open Fullscreen Geospatial Journey & Playback Corridor"
+        >
+          <Maximize2 size={13} />
+          <span>View Large Map</span>
+        </button>
       </div>
 
-      {/* Mode Sub-status Indicator */}
+      {/* Target Sub-status Indicator */}
       <div className="map-subhead-banner font-mono">
-        {mapMode === "trajectory" ? (
-          selectedVehicle ? (
-            <span className="map-active-target-tag">
-              ACTIVE TARGET: {selectedVehicle.plate || selectedVehicle.global_vehicle_id} ({selectedVehicle.camera_count} Cameras • {selectedVehicle.observation_count} Observations • Speed: {selectedVehicle.estimated_average_speed_label || "N/A"})
-            </span>
-          ) : (
-            <span style={{ color: "var(--text-muted)" }}>
-              SELECT OR SEARCH A TARGET PLATE TO RECONSTRUCT TRAJECTORY
-            </span>
-          )
+        {selectedVehicle ? (
+          <span className="map-active-target-tag">
+            ACTIVE TARGET: {selectedVehicle.plate || selectedVehicle.global_vehicle_id} ({selectedVehicle.camera_count || trajectoryPoints.length} Cameras • {selectedVehicle.observation_count || trajectoryPoints.length} Observations • Speed: {selectedVehicle.estimated_average_speed_label || "N/A"})
+          </span>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-            <span>SURVEILLANCE GRID: JUNCTION A ↔ JUNCTION B INTER-CITY CORRIDOR</span>
-            <span style={{ color: "var(--drishti-blue)" }}>
-              EST. CORRIDOR SPEED: {analytics?.speed_analytics?.average_speed_kmh ? `${analytics.speed_analytics.average_speed_kmh} km/h` : "81.1 km/h"}
-            </span>
-          </div>
+          <span style={{ color: "var(--text-muted)" }}>
+            SELECT OR SEARCH A TARGET PLATE TO RECONSTRUCT TRAJECTORY
+          </span>
         )}
       </div>
 
@@ -212,80 +252,22 @@ export function MapView({
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
 
-          {/* Highway Corridor Line */}
-          <Polyline
-            positions={corridorRoute}
-            color={mapMode === "traffic" ? "#D97706" : "#0284C7"}
-            weight={mapMode === "traffic" ? 6 : 3}
-            opacity={0.65}
-            dashArray={mapMode === "traffic" ? "8, 6" : "4, 4"}
-          />
+          {/* Vehicle trajectory polyline - RED COLOR when path exists */}
+          {trajectoryPoints.length > 1 && (
+            <Polyline
+              positions={trajectoryPoints.map((p) => [p.lat, p.lng])}
+              color="#DC2626"
+              weight={4}
+              opacity={0.9}
+            />
+          )}
 
-          {/* MODE B: Traffic Intensity Heatmap Circles */}
-          {mapMode === "traffic" &&
-            cameraMarkers.map((cam) => {
-              const radius = Math.max(16, Math.min(38, 14 + (cam.vehicle_count / 10)));
-              return (
-                <CircleMarker
-                  key={`heat-${cam.id}`}
-                  center={[cam.lat, cam.lng]}
-                  radius={radius}
-                  pathOptions={{
-                    color: cam.intensity_color,
-                    fillColor: cam.intensity_color,
-                    fillOpacity: 0.35,
-                    weight: 2,
-                  }}
-                  eventHandlers={{
-                    click: () => onCameraSelect?.(cam.id),
-                  }}
-                >
-                  <Popup>
-                    <div style={{ fontFamily: "var(--font-sans)", minWidth: "210px" }}>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>
-                        {cam.name || cam.id}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>
-                        Junction: {cam.junction_name || cam.junction_id}
-                      </div>
-
-                      <div className="map-popup-stat-grid font-mono">
-                        <div>
-                          <div className="popup-lbl">Vehicles</div>
-                          <div className="popup-val">{cam.vehicle_count}</div>
-                        </div>
-                        <div>
-                          <div className="popup-lbl">Density</div>
-                          <div className="popup-val">{cam.density_vpm} v/m</div>
-                        </div>
-                        <div>
-                          <div className="popup-lbl">Congestion</div>
-                          <div className="popup-val" style={{ color: cam.intensity_color }}>
-                            {cam.congestion_level} ({cam.congestion_index})
-                          </div>
-                        </div>
-                        <div>
-                          <div className="popup-lbl">Est. Speed</div>
-                          <div className="popup-val">
-                            {cam.estimated_speed ? `${cam.estimated_speed} km/h` : "N/A"}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--status-success)", fontWeight: 600 }}>
-                        ● Synchronized Live Node Feed
-                      </div>
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              );
-            })}
-
-          {/* Camera Pin Markers */}
+          {/* Camera Node Markers with CAMERA ICONS */}
           {cameraMarkers.map((camera) => (
             <Marker
               key={camera.id}
               position={[camera.lat, camera.lng]}
+              icon={createCameraIcon(camera, camera.id === selectedCameraId)}
               eventHandlers={{
                 click: () => onCameraSelect?.(camera.id),
               }}
@@ -302,47 +284,44 @@ export function MapView({
                     <strong style={{ color: camera.intensity_color }}>{camera.congestion_level}</strong>
                   </div>
                   <div style={{ color: "var(--status-success)", fontWeight: 600, fontSize: "11px", marginTop: "4px" }}>
-                    ● Operational Feed
+                    ● Operational CCTV Feed
                   </div>
                 </div>
               </Popup>
             </Marker>
           ))}
 
-          {/* MODE A: Vehicle trajectory polyline */}
-          {mapMode === "trajectory" && trajectoryPoints.length > 1 && (
-            <Polyline
-              positions={trajectoryPoints.map((p) => [p.lat, p.lng])}
-              color="#0284C7"
-              weight={4}
-              opacity={0.9}
-              dashArray="6, 6"
-            />
-          )}
-
-          {/* MODE A: Trajectory observation markers */}
-          {mapMode === "trajectory" &&
-            trajectoryPoints.map((point, index) => (
-              <Marker
-                key={`trajectory-${index}`}
-                position={[point.lat, point.lng]}
-                eventHandlers={{
-                  click: () => onCameraSelect?.(point.camera_id),
-                }}
-              >
-                <Popup>
-                  <div style={{ fontFamily: "var(--font-sans)" }}>
-                    <strong>Observation #{index + 1}</strong>
-                    <br />
-                    Camera: {point.camera_name || point.camera_id}
-                    <br />
-                    Time: {formatTime(point.timestamp_sec || point.timestamp)}
-                    <br />
-                    Est. Speed: {point.speed ? `${point.speed} km/h` : "N/A"}
+          {/* Vehicle Location PIN Markers (When a car is selected) */}
+          {trajectoryPoints.map((point, index) => (
+            <Marker
+              key={`trajectory-${index}`}
+              position={[point.lat, point.lng]}
+              icon={createVehiclePinIcon(
+                point,
+                index,
+                trajectoryPoints.length,
+                selectedVehicle?.plate || selectedVehicle?.global_vehicle_id
+              )}
+              eventHandlers={{
+                click: () => onCameraSelect?.(point.camera_id),
+              }}
+            >
+              <Popup>
+                <div style={{ fontFamily: "var(--font-sans)" }}>
+                  <div style={{ fontWeight: 800, color: "#DC2626", marginBottom: "4px" }}>
+                    {selectedVehicle?.plate || "TARGET VEHICLE"}
                   </div>
-                </Popup>
-              </Marker>
-            ))}
+                  <strong>Observation #{index + 1}</strong>
+                  <br />
+                  Camera: {point.camera_name || point.camera_id}
+                  <br />
+                  Time: {formatTime(point.timestamp_sec || point.timestamp)}
+                  <br />
+                  Est. Speed: {point.speed ? `${point.speed} km/h` : "N/A"}
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
           {mapBounds && <MapBounds bounds={mapBounds} />}
         </MapContainer>
@@ -377,6 +356,19 @@ export function MapView({
           );
         })}
       </div>
+
+      {/* FULL EXPANDED MAP & PLAYBACK MODAL (when self-contained) */}
+      {!onOpenFullMap && (
+        <FullMapModal
+          isOpen={isFullMapOpen}
+          onClose={() => setIsFullMapOpen(false)}
+          cameras={cameras}
+          selectedVehicle={selectedVehicle}
+          selectedCameraId={selectedCameraId}
+          onCameraSelect={onCameraSelect}
+          onPlayEvent={onPlayEvent}
+        />
+      )}
     </div>
   );
 }

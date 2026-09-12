@@ -21,7 +21,7 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_A_camera_01",
         "junction_id": "junction_A",
-        "junction_name": "Junction A",
+        "junction_name": "Vivekananda Sarani",
         "camera_name": "Camera 01",
         "video_path": "dataset/junction_A/camera_01.mp4",
         "lat": 23.710299,
@@ -30,7 +30,7 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_A_camera_02",
         "junction_id": "junction_A",
-        "junction_name": "Junction A",
+        "junction_name": "Vivekananda Sarani",
         "camera_name": "Camera 02",
         "video_path": "dataset/junction_A/camera_02.mp4",
         "lat": 23.710293,
@@ -39,7 +39,7 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_B_camera_01",
         "junction_id": "junction_B",
-        "junction_name": "Junction B",
+        "junction_name": "Kanyapur Link Road",
         "camera_name": "Camera 01",
         "video_path": "dataset/junction_B/camera_01.mp4",
         "lat": 23.713932,
@@ -48,7 +48,7 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_B_camera_02",
         "junction_id": "junction_B",
-        "junction_name": "Junction B",
+        "junction_name": "Kanyapur Link Road",
         "camera_name": "Camera 02",
         "video_path": "dataset/junction_B/camera_02.mp4",
         "lat": 23.713929,
@@ -123,6 +123,13 @@ def get_camera_info(camera_id: str) -> Optional[Dict[str, Any]]:
     return get_cameras_dict().get(camera_id)
 
 
+def reload_detections():
+    """Clear in-memory detections cache and reload from disk."""
+    global _DETECTIONS_CACHE
+    _DETECTIONS_CACHE = None
+    return load_detections()
+
+
 def load_detections() -> List[Dict[str, Any]]:
     """Load all consolidated vehicle/plate detections from detections.json."""
     global _DETECTIONS_CACHE
@@ -174,13 +181,13 @@ def get_map_model() -> Dict[str, Any]:
         "junctions": {
             "junction_A": {
                 "id": "junction_A",
-                "name": "Junction A",
+                "name": "Vivekananda Sarani",
                 "lat": 23.710299,
                 "lng": 86.952779,
             },
             "junction_B": {
                 "id": "junction_B",
-                "name": "Junction B",
+                "name": "Kanyapur Link Road",
                 "lat": 23.713932,
                 "lng": 86.952211,
             }

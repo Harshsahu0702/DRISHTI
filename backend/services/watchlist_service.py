@@ -22,10 +22,10 @@ _lock = RLock()
 
 
 def normalize_plate(plate: str) -> str:
-    """Normalize license plate: uppercase, remove spaces, hyphens, underscores."""
+    """Normalize license plate: uppercase, remove spaces, hyphens, dots, underscores, punctuation."""
     if not plate:
         return ""
-    return re.sub(r"[\s\-_]", "", str(plate)).upper()
+    return re.sub(r"[^A-Za-z0-9]", "", str(plate)).upper()
 
 
 class WatchlistService:

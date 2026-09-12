@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Header } from "./components/Header";
 import { CameraGrid } from "./components/CameraGrid";
-import { KpiStrip } from "./components/KpiStrip";
 import { VehicleSearch } from "./components/VehicleSearch";
-import { JourneyTimeline } from "./components/JourneyTimeline";
 import { MapView } from "./components/MapView";
 import { AnalyticsSection } from "./components/AnalyticsSection";
 import { GlobalRegistry } from "./components/GlobalRegistry";
 import { BlacklistManagement } from "./components/BlacklistManagement";
 import BlacklistModal from "./components/BlacklistModal";
-import { AiPipelineVisualizer } from "./components/AiPipelineVisualizer";
-import { SystemHealth } from "./components/SystemHealth";
 import { VehicleDetailModal } from "./components/VehicleDetailModal";
 import { CyberLoadingScreen } from "./components/CyberLoadingScreen";
 import { TrafficAnalyticsPage } from "./components/TrafficAnalyticsPage";
+import { SystemValidationPage } from "./components/SystemValidationPage";
+import { EvidencePlaybackModal } from "./components/EvidencePlaybackModal";
+import { FullMapModal } from "./components/FullMapModal";
 import { api } from "./services/api";
 import "./App.css";
 
@@ -24,14 +23,17 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [alertsData, setAlertsData] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
+  const [blacklistVehicles, setBlacklistVehicles] = useState([]);
   const [systemHealth, setSystemHealth] = useState(null);
   const [isBackendOnline, setIsBackendOnline] = useState(false);
   const [isDbOnline, setIsDbOnline] = useState(false);
 
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [selectedCameraId, setSelectedCameraId] = useState("junction_A_camera_01");
+  const [selectedCameraId, setSelectedCameraId] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isFullMapOpen, setIsFullMapOpen] = useState(false);
   const [isAddBlacklistModalOpen, setIsAddBlacklistModalOpen] = useState(false);
+  const [evidenceModalData, setEvidenceModalData] = useState(null);
   const [blacklistRefreshTrigger, setBlacklistRefreshTrigger] = useState(0);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -104,6 +106,15 @@ export default function App() {
         wlRes = [];
       }
 
+      /* BLACKLIST */
+      let blRes = [];
+      try {
+        blRes = await api.getBlacklist();
+      } catch (e) {
+        console.warn("[Dashboard] Blacklist failed:", e);
+        blRes = [];
+      }
+
       /* SYSTEM HEALTH */
       let healthRes = null;
       try {
@@ -127,6 +138,7 @@ export default function App() {
       setAnalytics(anaRes || null);
       setAlertsData(altRes || null);
       setWatchlist(Array.isArray(wlRes) ? wlRes : []);
+      setBlacklistVehicles(Array.isArray(blRes) ? blRes : []);
       setSystemHealth(healthRes || null);
       setIsBackendOnline(Boolean(healthRes));
 
@@ -176,20 +188,120 @@ export default function App() {
     return () => clearInterval(pollInterval);
   }, []);
 
-  /* VIDEO EVENT SEEK */
-  const handlePlayEvent = (cameraId, timestampSeconds, label) => {
-    console.info("[Video Event Seek]", { cameraId, timestampSeconds, label });
+  /* EVIDENCE PLAY MODAL TRIGGER */
+  const handlePlayEvent = (cameraId, timestampSeconds, label, extra = {}) => {
+    console.info("[Video Event Play Requested]", { cameraId, timestampSeconds, label, extra });
 
-    if (
-      cameraGridRef.current &&
-      typeof cameraGridRef.current.seekAndPlay === "function"
-    ) {
-      cameraGridRef.current.seekAndPlay(cameraId, timestampSeconds, label);
+    const camObj = cameras[cameraId] || {};
+    const camName = camObj.name || camObj.camera_name || cameraId;
+    const juncName = camObj.scene || camObj.junction_name || "Vivekananda Sarani / Kanyapur Link Rd";
+
+    // Extract plate from label e.g. "WB37E1275 @ Camera 01" or extra or selectedVehicle
+    let plate =
+      extra.plate ||
+      extra.plate_number ||
+      extra.normalized_plate;
+
+    if (!plate && label && label.includes("@")) {
+      const candidate = label.split("@")[0].trim();
+      if (candidate && candidate !== "undefined" && candidate !== "null" && candidate !== "Target") {
+        plate = candidate;
+      }
+    }
+    if (!plate && label && !label.startsWith("Alert:")) {
+      const candidate = label.trim();
+      if (candidate && candidate !== "undefined" && candidate !== "null") {
+        plate = candidate;
+      }
+    }
+    if (!plate && selectedVehicle) {
+      plate =
+        selectedVehicle.plate ||
+        selectedVehicle.plate_number ||
+        selectedVehicle.normalized_plate;
+    }
+    if (!plate || plate === "undefined" || plate === "null") {
+      plate = "DETECTED VEHICLE";
+    }
+
+    // Look up plate crop image
+    let plateImage = extra.plate_image || extra.plateImage || extra.plate_image_url;
+    if (!plateImage && selectedVehicle?.plate_image_url) {
+      plateImage = selectedVehicle.plate_image_url;
+    }
+    if (!plateImage && selectedVehicle?.trajectory) {
+      const matchLoc = selectedVehicle.trajectory.find((t) => t.camera_id === cameraId);
+      if (matchLoc?.plate_image_url || matchLoc?.plate_image) {
+        plateImage = matchLoc.plate_image_url || matchLoc.plate_image;
+      }
+    }
+
+    // Check blacklist status
+    const isBlacklisted =
+      extra.isBlacklisted !== undefined
+        ? extra.isBlacklisted
+        : Boolean(
+            blacklistVehicles.find(
+              (b) =>
+                b.plate_number === plate ||
+                b.normalized_plate === plate ||
+                (selectedVehicle &&
+                  (b.plate_number === selectedVehicle.plate_number ||
+                    b.normalized_plate === selectedVehicle.normalized_plate))
+            )
+          );
+
+    setEvidenceModalData({
+      cameraId,
+      cameraName: camName,
+      junctionName: juncName,
+      timestamp: Number(timestampSeconds) || 0,
+      plate,
+      plateImage,
+      vehicleType: extra.vehicle_type || selectedVehicle?.vehicle_type || "car",
+      confidence: extra.confidence || 0.96,
+      isBlacklisted,
+      bbox: (extra.bbox && typeof extra.bbox.x === "number") ? extra.bbox : { x: 38, y: 44, width: 24, height: 26 },
+      label: label || `${plate} @ ${camName}`,
+    });
+  };
+
+  /* CONFIRM PLAYBACK: REDIRECT UP, SEEK -3s, AND HIGHLIGHT CAR */
+  const handleConfirmEvidencePlayback = ({
+    cameraId,
+    seekTime,
+    originalTimestamp,
+    bbox,
+    plate,
+    label,
+  }) => {
+    setEvidenceModalData(null);
+
+    // Switch to surveillance tab if on analytics or validation
+    if (activeTab !== "surveillance") {
+      setActiveTab("surveillance");
     }
 
     if (cameraId) {
       setSelectedCameraId(cameraId);
     }
+
+    // Smooth scroll up to CCTV Camera Grid
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Seek to 3 seconds before the event and play with bounding box highlight
+    setTimeout(() => {
+      if (
+        cameraGridRef.current &&
+        typeof cameraGridRef.current.seekAndPlay === "function"
+      ) {
+        cameraGridRef.current.seekAndPlay(cameraId, seekTime, label, {
+          plate,
+          originalTimestamp,
+          bbox,
+        });
+      }
+    }, 250);
   };
 
   /* SELECT VEHICLE */
@@ -226,6 +338,37 @@ export default function App() {
     ) {
       setSelectedCameraId(targetVehicle.camera_ids[0]);
     }
+  };
+
+  /* TRACE VEHICLE JOURNEY ON FULL MAP */
+  const handleTraceVehicleJourneyOnMap = async (vehicleOrObj) => {
+    if (!vehicleOrObj) return;
+    let targetVehicle = vehicleOrObj;
+    if (typeof vehicleOrObj === "string") {
+      targetVehicle = { plate: vehicleOrObj };
+    }
+    const plate =
+      targetVehicle.plate ||
+      targetVehicle.plate_number ||
+      targetVehicle.normalized_plate;
+
+    if (plate) {
+      try {
+        const searchResults = await api.searchVehicles(plate);
+        if (searchResults && searchResults.length > 0) {
+          targetVehicle = searchResults[0];
+        }
+      } catch (err) {
+        console.warn("Failed to resolve journey for map trace:", err);
+      }
+    }
+    setSelectedVehicle(targetVehicle);
+
+    if (Array.isArray(targetVehicle.trajectory) && targetVehicle.trajectory.length > 0) {
+      const firstCam = targetVehicle.trajectory[0]?.camera_id;
+      if (firstCam) setSelectedCameraId(firstCam);
+    }
+    setIsFullMapOpen(true);
   };
 
   /* OPEN VEHICLE DOSSIER */
@@ -265,6 +408,39 @@ export default function App() {
     setAlertsData(updatedAlerts);
   };
 
+  /* CONSTANT BLACKLIST ALERT:
+     Triggered when vehicle is active (is_active: true) AND has been detected on CCTV (detection_count > 0 or last_seen).
+     Dismissed ONLY when deactivated. */
+  const activeAlertVehicles = useMemo(() => {
+    return (blacklistVehicles || []).filter((v) => {
+      const isActive = v.is_active === true || v.is_active === 1 || v.status === "blacklisted" || v.status === "ACTIVE";
+      const isDetected = Number(v.detection_count || 0) > 0 || Boolean(v.last_seen);
+      return isActive && isDetected;
+    });
+  }, [blacklistVehicles]);
+
+  const handleDeactivateBlacklistVehicle = async (vehicleId) => {
+    try {
+      await api.updateBlacklist(vehicleId, { is_active: false });
+      showToast("Target vehicle deactivated. Constant alert dismissed.");
+      setBlacklistRefreshTrigger((prev) => prev + 1);
+      await loadDashboardData(false);
+    } catch (err) {
+      console.error("Failed to deactivate vehicle:", err);
+      showToast("Failed to deactivate target vehicle.");
+    }
+  };
+
+  const handleGoToBlacklist = () => {
+    setActiveTab("surveillance");
+    setTimeout(() => {
+      const el = document.getElementById("blacklist-management-section");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 150);
+  };
+
   /* LOADING SCREEN */
   if (loading) {
     return <CyberLoadingScreen onFinished={() => setLoading(false)} />;
@@ -272,15 +448,15 @@ export default function App() {
 
   return (
     <div className="command-center-app">
-      {/* 1. HEADER WITH NAVIGATION TABS */}
+      {/* 1. HEADER WITH NAVIGATION TABS & CONSTANT ALERT */}
       <Header
-        systemHealth={systemHealth}
-        camerasCount={Object.keys(cameras || {}).length}
-        isBackendOnline={isBackendOnline}
-        isDbOnline={isDbOnline}
         onOpenAddBlacklist={() => setIsAddBlacklistModalOpen(true)}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
+        activeAlertVehicles={activeAlertVehicles}
+        onDeactivateVehicle={handleDeactivateBlacklistVehicle}
+        onGoToBlacklist={handleGoToBlacklist}
+        onSelectVehicle={handleSelectVehicle}
       />
 
       {/* 2. MAIN OPERATIONS BODY */}
@@ -294,6 +470,10 @@ export default function App() {
             onBackToSurveillance={() => setActiveTab("surveillance")}
             onSelectVehicle={handleSelectVehicle}
           />
+        ) : activeTab === "validation" ? (
+          <SystemValidationPage
+            onBackToSurveillance={() => setActiveTab("surveillance")}
+          />
         ) : (
           /* SURVEILLANCE & RE-ID COMMAND CENTER */
           <>
@@ -303,34 +483,14 @@ export default function App() {
               cameras={cameras}
               selectedCameraId={selectedCameraId}
               onCameraSelect={handleCameraSelect}
+              isBackgroundPaused={Boolean(evidenceModalData)}
             />
-
-            {/* KPI STRIP */}
-            <KpiStrip kpis={analytics?.kpis} />
-
-            {/* PROMINENT TRAFFIC ANALYTICS ACCESS BANNER */}
-            <div className="analytics-page-nav-banner">
-              <div className="apnb-content">
-                <div className="apnb-icon-slot">📊</div>
-                <div className="apnb-text">
-                  <strong>Looking for Macro Traffic Flow Analytics, Origin-Destination Matrix & Congestion Loads?</strong>
-                  <p>Continuous sensor telemetry, Haversine corridor velocities, and bottleneck predictions are compiled on the dedicated mobility page.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="apnb-btn font-mono"
-                onClick={() => setActiveTab("analytics")}
-                title="View full Origin-Destination matrix, node loads, and speed spectrum"
-              >
-                Open Traffic Mobility Page ➜
-              </button>
-            </div>
 
             {/* VEHICLE SEARCH & GEOSPATIAL MAP DUO */}
             <div className="investigation-duo-grid">
               {/* Left: Vehicle Search */}
               <VehicleSearch
+                vehicles={vehicles}
                 selectedVehicle={selectedVehicle}
                 onSelectVehicle={handleSelectVehicle}
                 onPlayEvent={handlePlayEvent}
@@ -344,19 +504,15 @@ export default function App() {
                 selectedCameraId={selectedCameraId}
                 onCameraSelect={handleCameraSelect}
                 analytics={analytics}
+                onPlayEvent={handlePlayEvent}
+                onOpenFullMap={() => setIsFullMapOpen(true)}
               />
             </div>
-
-            {/* CHRONOLOGICAL JOURNEY TIMELINE */}
-            <JourneyTimeline
-              selectedVehicle={selectedVehicle}
-              onPlayEvent={handlePlayEvent}
-              onFocusCamera={handleCameraSelect}
-            />
 
             {/* OPERATOR BLACKLIST MANAGEMENT (MYSQL PERSISTENT SURVEILLANCE & VIEW DOSSIER) */}
             <BlacklistManagement
               onSelectVehicle={handleSelectVehicle}
+              onTraceJourney={handleTraceVehicleJourneyOnMap}
               onOpenAddModal={() => setIsAddBlacklistModalOpen(true)}
               refreshTrigger={blacklistRefreshTrigger}
               onDeleteSuccess={(msg) => {
@@ -376,15 +532,6 @@ export default function App() {
               vehicles={vehicles}
               selectedVehicleId={selectedVehicle?.global_vehicle_id}
               onSelectVehicle={handleOpenDossier}
-            />
-
-            {/* 10-STAGE TECHNICAL AI PIPELINE */}
-            <AiPipelineVisualizer />
-
-            {/* SYSTEM HEALTH TELEMETRY */}
-            <SystemHealth
-              healthData={systemHealth}
-              isBackendOnline={isBackendOnline}
             />
           </>
         )}
@@ -410,6 +557,25 @@ export default function App() {
           onFocusCamera={handleCameraSelect}
         />
       )}
+
+      {/* CCTV FORENSIC EVIDENCE PLAYBACK MODAL (-5s PRE-ROLL & TARGET AUTO-PAUSE) */}
+      <EvidencePlaybackModal
+        isOpen={Boolean(evidenceModalData)}
+        eventData={evidenceModalData}
+        onClose={() => setEvidenceModalData(null)}
+        onPlay={handleConfirmEvidencePlayback}
+      />
+
+      {/* FULL EXPANDED GEOSPATIAL MAP & TRAJECTORY RECONSTRUCTION MODAL */}
+      <FullMapModal
+        isOpen={isFullMapOpen}
+        onClose={() => setIsFullMapOpen(false)}
+        cameras={cameras}
+        selectedVehicle={selectedVehicle}
+        selectedCameraId={selectedCameraId}
+        onCameraSelect={handleCameraSelect}
+        onPlayEvent={handlePlayEvent}
+      />
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
@@ -440,7 +606,7 @@ export default function App() {
       {/* FOOTER */}
       <footer className="command-footer font-mono">
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>DRISHTI-X</span>
+          <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>DRISHTI</span>
           <span>•</span>
           <span>CITY-WIDE VISUAL INTELLIGENCE FOR VEHICLE TRACKING & MOBILITY ANALYSIS</span>
           <span>•</span>

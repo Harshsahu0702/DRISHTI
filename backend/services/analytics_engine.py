@@ -58,7 +58,7 @@ class AnalyticsEngine:
             {
                 "camera_id": "junction_A_camera_01",
                 "junction_id": "junction_A",
-                "junction_name": "Junction A",
+                "junction_name": "Vivekananda Sarani",
                 "camera_name": "Camera 01",
                 "video_path": "dataset/junction_A/camera_01.mp4",
                 "lat": 23.710299,
@@ -67,7 +67,7 @@ class AnalyticsEngine:
             {
                 "camera_id": "junction_A_camera_02",
                 "junction_id": "junction_A",
-                "junction_name": "Junction A",
+                "junction_name": "Vivekananda Sarani",
                 "camera_name": "Camera 02",
                 "video_path": "dataset/junction_A/camera_02.mp4",
                 "lat": 23.710293,
@@ -76,7 +76,7 @@ class AnalyticsEngine:
             {
                 "camera_id": "junction_B_camera_01",
                 "junction_id": "junction_B",
-                "junction_name": "Junction B",
+                "junction_name": "Kanyapur Link Road",
                 "camera_name": "Camera 01",
                 "video_path": "dataset/junction_B/camera_01.mp4",
                 "lat": 23.713932,
@@ -85,7 +85,7 @@ class AnalyticsEngine:
             {
                 "camera_id": "junction_B_camera_02",
                 "junction_id": "junction_B",
-                "junction_name": "Junction B",
+                "junction_name": "Kanyapur Link Road",
                 "camera_name": "Camera 02",
                 "video_path": "dataset/junction_B/camera_02.mp4",
                 "lat": 23.713929,
@@ -392,7 +392,7 @@ class AnalyticsEngine:
 
             junction_analytics.append({
                 "junction_id": jid,
-                "junction_name": "Junction A" if jid == "junction_A" else "Junction B",
+                "junction_name": "Vivekananda Sarani" if jid == "junction_A" else "Kanyapur Link Road",
                 "vehicle_count": j_cnt,
                 "share_pct": j_share,
                 "density_vpm": j_density,
@@ -400,13 +400,13 @@ class AnalyticsEngine:
                 "camera_count": len(j_cams),
             })
 
-        # Cross-corridor flows (Junction A -> Junction B)
+        # Cross-corridor flows (Vivekananda Sarani -> Kanyapur Link Road)
         corridor_flows = [
             {
-                "source": "Junction A",
-                "target": "Junction B",
+                "source": "Vivekananda Sarani",
+                "target": "Kanyapur Link Road",
                 "count": len(multi_junction_plates),
-                "label": "Inter-Junction Highway Corridor (A → B)",
+                "label": "Inter-Junction Highway Corridor (Vivekananda Sarani → Kanyapur Link Road)",
                 "active": len(multi_junction_plates) > 0,
             }
         ]
