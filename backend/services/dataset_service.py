@@ -6,6 +6,7 @@ Coordinates strictly preserve intentional Junction A & Junction B positions.
 Delegates heavy traffic calculations to analytics_engine.
 """
 
+import os
 from pathlib import Path
 import json
 from typing import Dict, List, Any, Optional
@@ -110,7 +111,11 @@ def get_cameras_dict() -> Dict[str, Dict[str, Any]]:
     for cam in raw_list:
         cam_id = cam["camera_id"]
         vpath = PROJECT_ROOT / cam.get("video_path", "")
-        remote_url = cam.get("remote_video_url") or os.getenv(f"REMOTE_VIDEO_{cam_id.upper()}", "")
+        remote_url = os.getenv(f"REMOTE_VIDEO_{cam_id.upper()}", "").strip() or cam.get("remote_video_url", "").strip()
+        if not remote_url:
+            release_base = os.getenv("REMOTE_VIDEO_BASE_URL", "https://github.com/Harshsahu0702/DRISHTI/releases/download/v1.0-assets").rstrip("/")
+            remote_url = f"{release_base}/{cam_id}.mp4"
+
         item = {
             "id": cam_id,
             "camera_id": cam_id,
