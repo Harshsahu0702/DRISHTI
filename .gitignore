@@ -87,15 +87,19 @@ videos/
 *.wmv
 *.flv
 data/processed/
+dataset/grid/
+static/cache/
 
 # Extracted crops & image dumps
-static/plates/
+!static/plates/
+!static/plates/*.jpg
 runs/detect/plate_detection/plates/
 
 # Scratch & temporary workspace folders
 scratch/
 tmp/
 temp/
+*.log
 
 # Large archives & SQL backups (Optional: seed/schema scripts are kept in database/)
 *.zip

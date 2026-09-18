@@ -13,7 +13,7 @@ function formatCamShort(camId) {
     .replace("camera_", "C");
 }
 
-export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId }) {
+export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selectedVehicleId }) {
   const [filter, setFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,13 +66,39 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
     // 4. Sorting
     const sorted = [...list];
     if (sortBy === "observations") {
-      sorted.sort((a, b) => (b.observation_count || 1) - (a.observation_count || 1));
+      sorted.sort((a, b) => {
+        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
+          return b.has_plate ? 1 : -1;
+        }
+        return (b.observation_count || 1) - (a.observation_count || 1);
+      });
     } else if (sortBy === "cameras") {
-      sorted.sort((a, b) => (b.camera_count || 1) - (a.camera_count || 1));
+      sorted.sort((a, b) => {
+        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
+          return b.has_plate ? 1 : -1;
+        }
+        return (b.camera_count || 1) - (a.camera_count || 1);
+      });
     } else if (sortBy === "first_seen") {
       sorted.sort((a, b) => (a.first_seen || 0) - (b.first_seen || 0));
     } else if (sortBy === "plate") {
-      sorted.sort((a, b) => (a.plate || a.global_vehicle_id || "").localeCompare(b.plate || b.global_vehicle_id || ""));
+      sorted.sort((a, b) => {
+        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
+          return b.has_plate ? 1 : -1;
+        }
+        return (a.plate || a.global_vehicle_id || "").localeCompare(b.plate || b.global_vehicle_id || "");
+      });
+    } else {
+      // Default: Recognized ANPR plates first, then cross-camera, then observation count
+      sorted.sort((a, b) => {
+        const aPlate = a.has_plate ? 1 : 0;
+        const bPlate = b.has_plate ? 1 : 0;
+        if (bPlate !== aPlate) return bPlate - aPlate;
+        const aCross = (a.camera_count || 1) > 1 ? 1 : 0;
+        const bCross = (b.camera_count || 1) > 1 ? 1 : 0;
+        if (bCross !== aCross) return bCross - aCross;
+        return (b.observation_count || 1) - (a.observation_count || 1);
+      });
     }
 
     return sorted;
@@ -89,14 +115,14 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
       {/* Section Header */}
       <div className="section-header-block" style={{ marginBottom: "0" }}>
         <div>
-          <div className="section-eyebrow">Entity Resolution Database</div>
-          <h2 className="section-main-heading">Global Vehicle Identity Registry</h2>
+          <div className="section-eyebrow">Vehicle Database</div>
+          <h2 className="section-main-heading">All Tracked Vehicles Registry</h2>
           <p className="section-subtext">
-            Unified cross-camera vehicle registry compiled by YOLO11 detection, ByteTrack tracking, and ANPR plate recognition.
+            Complete list of vehicles tracked across city CCTV cameras by AI.
           </p>
         </div>
         <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-muted)" }}>
-          ACTIVE ENTITIES: <span className="font-mono" style={{ color: "var(--drishti-blue)" }}>{filteredVehicles.length}</span>
+          ACTIVE VEHICLES: <span className="font-mono" style={{ color: "var(--drishti-blue)" }}>{filteredVehicles.length}</span>
           <span style={{ color: "var(--text-dim)", marginLeft: "4px" }}>/ {totalRawCount} Total</span>
         </div>
       </div>
@@ -181,9 +207,9 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
             }}
           >
             <option value="default">Sort: Multi-Cam Priority</option>
-            <option value="observations">Sort: Observations (High-Low)</option>
-            <option value="cameras">Sort: Camera Nodes</option>
-            <option value="first_seen">Sort: First Seen Chronological</option>
+            <option value="observations">Sort: Sightings (High-Low)</option>
+            <option value="cameras">Sort: Camera Count</option>
+            <option value="first_seen">Sort: First Seen (Oldest First)</option>
             <option value="plate">Sort: Plate (A-Z)</option>
           </select>
         </div>
@@ -237,14 +263,39 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
                   <tr
                     key={v.global_vehicle_id}
                     className={isSelected ? "is-selected-row" : ""}
-                    onClick={() => onSelectVehicle && onSelectVehicle(v)}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      if (onOpenDossier) {
+                        onOpenDossier(v);
+                      } else if (onSelectVehicle) {
+                        onSelectVehicle(v);
+                      }
+                    }}
                   >
                     {/* Target / Plate */}
                     <td>
                       {v.has_plate && v.plate ? (
                         <div className="table-plate-pill font-mono">{v.plate}</div>
                       ) : (
-                        <div className="table-gid-tag font-mono">{v.global_vehicle_id}</div>
+                        <div className="table-gid-tag font-mono" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              fontWeight: "800",
+                              letterSpacing: "0.04em",
+                              padding: "2px 5px",
+                              borderRadius: "3px",
+                              background: "rgba(107, 92, 80, 0.14)",
+                              color: "var(--text-muted)",
+                              border: "1px solid var(--border-default)",
+                            }}
+                          >
+                            TRACK ONLY
+                          </span>
+                          <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
+                            {v.global_vehicle_id}
+                          </span>
+                        </div>
                       )}
                     </td>
 
@@ -321,11 +372,15 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, selectedVehicleId })
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectVehicle && onSelectVehicle(v);
+                          if (onOpenDossier) {
+                            onOpenDossier(v);
+                          } else if (onSelectVehicle) {
+                            onSelectVehicle(v);
+                          }
                         }}
                       >
                         <Eye size={12} />
-                        Dossier
+                        View Report
                       </button>
                     </td>
                   </tr>

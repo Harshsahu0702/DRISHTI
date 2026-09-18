@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Flame } from "lucide-react";
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
   Polyline,
+  Circle,
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { formatTime } from "../services/api";
 import { FullMapModal } from "./FullMapModal";
+import { JourneyRouteSummary } from "./JourneyRouteSummary";
 
 // Intentional Junction Coordinates
 const JUNCTION_COORDINATES = {
@@ -104,6 +106,7 @@ export function MapView({
   onOpenFullMap,
 }) {
   const [isFullMapOpen, setIsFullMapOpen] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const trajectory = useMemo(() => {
     if (!selectedVehicle) return [];
@@ -207,31 +210,48 @@ export function MapView({
     <div className="geospatial-map-card">
       <div className="section-header-block map-card-header-flex" style={{ marginBottom: "8px" }}>
         <div>
-          <div className="section-eyebrow">Geospatial Intelligence</div>
+          <div className="section-eyebrow">City Map & GPS Route</div>
           <h2 className="section-main-heading">
-            Vehicle Journey & Trajectory Map
+            Vehicle Journey & Route Map
           </h2>
           <p className="section-subtext">
-            Reconstructed target route across urban CCTV nodes and highway corridor.
+            Tracked vehicle route across city CCTV cameras and roads.
           </p>
         </div>
 
-        <button
-          type="button"
-          className="btn-map-expand font-mono"
-          onClick={() => (onOpenFullMap ? onOpenFullMap() : setIsFullMapOpen(true))}
-          title="Open Fullscreen Geospatial Journey & Playback Corridor"
-        >
-          <Maximize2 size={13} />
-          <span>View Large Map</span>
-        </button>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button
+            type="button"
+            className="btn-map-expand font-mono"
+            onClick={() => setShowHeatmap(!showHeatmap)}
+            style={{
+              border: showHeatmap ? "1.5px solid #DC2626" : undefined,
+              color: showHeatmap ? "#DC2626" : undefined,
+              background: showHeatmap ? "rgba(220, 38, 38, 0.12)" : undefined,
+            }}
+            title="Toggle City-Wide Traffic Density Heatmap"
+          >
+            <Flame size={13} style={{ color: showHeatmap ? "#DC2626" : "var(--text-muted)" }} />
+            <span>{showHeatmap ? "Heatmap: ON" : "Heatmap"}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-map-expand font-mono"
+            onClick={() => (onOpenFullMap ? onOpenFullMap() : setIsFullMapOpen(true))}
+            title="Open Fullscreen Route Map & Video Playback"
+          >
+            <Maximize2 size={13} />
+            <span>View Large Map</span>
+          </button>
+        </div>
       </div>
 
       {/* Target Sub-status Indicator */}
       <div className="map-subhead-banner font-mono">
         {selectedVehicle ? (
           <span className="map-active-target-tag">
-            ACTIVE TARGET: {selectedVehicle.plate || selectedVehicle.global_vehicle_id} ({selectedVehicle.camera_count || trajectoryPoints.length} Cameras • {selectedVehicle.observation_count || trajectoryPoints.length} Observations • Speed: {selectedVehicle.estimated_average_speed_label || "N/A"})
+            SELECTED VEHICLE: {selectedVehicle.plate || selectedVehicle.global_vehicle_id} ({selectedVehicle.camera_count || trajectoryPoints.length} Cameras • {selectedVehicle.observation_count || trajectoryPoints.length} Sightings • Speed: {selectedVehicle.estimated_average_speed_label || "N/A"})
           </span>
         ) : (
           <span style={{ color: "var(--text-muted)" }}>
@@ -251,6 +271,42 @@ export function MapView({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
+
+          {/* Traffic Density Heatmap Layer */}
+          {showHeatmap && cameraMarkers.map((camera) => (
+            <React.Fragment key={`mini-heatmap-${camera.id}`}>
+              <Circle
+                center={[camera.lat, camera.lng]}
+                radius={100}
+                pathOptions={{
+                  color: "#DC2626",
+                  fillColor: "#DC2626",
+                  fillOpacity: 0.14,
+                  weight: 0,
+                }}
+              />
+              <Circle
+                center={[camera.lat, camera.lng]}
+                radius={60}
+                pathOptions={{
+                  color: "#D97706",
+                  fillColor: "#D97706",
+                  fillOpacity: 0.25,
+                  weight: 0,
+                }}
+              />
+              <Circle
+                center={[camera.lat, camera.lng]}
+                radius={28}
+                pathOptions={{
+                  color: "#EF4444",
+                  fillColor: "#EF4444",
+                  fillOpacity: 0.42,
+                  weight: 1,
+                }}
+              />
+            </React.Fragment>
+          ))}
 
           {/* Vehicle trajectory polyline - RED COLOR when path exists */}
           {trajectoryPoints.length > 1 && (
@@ -356,6 +412,12 @@ export function MapView({
           );
         })}
       </div>
+
+      {/* CLEAN & SPACIOUS CROSS-JUNCTION JOURNEY SUMMARY */}
+      <JourneyRouteSummary
+        selectedVehicle={selectedVehicle}
+        cameras={cameras}
+      />
 
       {/* FULL EXPANDED MAP & PLAYBACK MODAL (when self-contained) */}
       {!onOpenFullMap && (

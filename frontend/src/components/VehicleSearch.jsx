@@ -10,8 +10,20 @@ import {
   CheckCircle,
   ShieldAlert,
   X,
+  Printer,
+  Download,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
-import { api, formatTime } from "../services/api";
+import {
+  api,
+  formatTime,
+  getCanonicalCameraName,
+  getCanonicalJunctionName,
+  normalizeCameraId,
+} from "../services/api";
+import { PoliceDossierModal } from "./PoliceDossierModal";
+import { VahanCard } from "./VahanCard";
 
 function normalizePlateSearch(query) {
   if (!query) return "";
@@ -39,6 +51,7 @@ function highlightMatch(text, query) {
 }
 
 const QUICK_SEARCH_EXAMPLES = [
+  { label: "JH10CS2095", type: "Target Plate", desc: "Primary Multi-Camera Target (4 Cameras across Junction A & B)" },
   { label: "Z48H9831N", type: "Target Plate", desc: "Cross-Camera & Cross-Junction (Junction A & B)" },
   { label: "WB37E1275", type: "Target Plate", desc: "Junction B Camera 01 (Confirmed Plate)" },
   { label: "JH10DL8792", type: "Target Plate", desc: "Junction A Camera 02 (Confirmed Plate)" },
@@ -51,6 +64,7 @@ export function VehicleSearch({
   onPlayEvent,
   onFocusCamera,
   selectedVehicle,
+  cameras = {},
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -58,6 +72,10 @@ export function VehicleSearch({
   const [searchResult, setSearchResult] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [vahanData, setVahanData] = useState(null);
+  const [fraudCheckData, setFraudCheckData] = useState(null);
+  const [loadingVahan, setLoadingVahan] = useState(false);
 
   const searchContainerRef = useRef(null);
 
@@ -231,15 +249,50 @@ export function VehicleSearch({
   };
 
   const activeVehicle = selectedVehicle || searchResult;
+  const targetPlate = activeVehicle?.plate || activeVehicle?.global_vehicle_id;
+
+  useEffect(() => {
+    if (!targetPlate) {
+      setVahanData(null);
+      setFraudCheckData(null);
+      return;
+    }
+
+    if (activeVehicle?.vahan) {
+      setVahanData(activeVehicle.vahan);
+      setFraudCheckData(activeVehicle.fraud_check);
+      return;
+    }
+
+    let isMounted = true;
+    setLoadingVahan(true);
+
+    Promise.all([
+      api.getVahanDetails(targetPlate, activeVehicle?.vehicle_type).catch(() => null),
+      api.getFraudCheck(targetPlate).catch(() => null),
+    ]).then(([vahan, fraud]) => {
+      if (!isMounted) return;
+      if (vahan) setVahanData(vahan);
+      if (fraud) setFraudCheckData(fraud);
+      setLoadingVahan(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [targetPlate, activeVehicle?.vahan, activeVehicle?.vehicle_type]);
+
+  const effectiveVahan = activeVehicle?.vahan || vahanData;
+  const effectiveFraud = activeVehicle?.fraud_check || fraudCheckData;
 
   return (
     <div className="vehicle-search-card">
       {/* Search Header */}
       <div>
-        <div className="section-eyebrow">Vehicle Target Intelligence</div>
+        <div className="section-eyebrow">Vehicle Search & Tracking</div>
         <h2 className="section-main-heading">Find a Vehicle</h2>
         <p className="section-subtext">
-          Locate city-wide vehicle records by license plate number, target ID, or camera track.
+          Find any vehicle across city cameras by number plate or vehicle ID.
         </p>
       </div>
 
@@ -283,7 +336,7 @@ export function VehicleSearch({
             disabled={isSearching}
             onClick={() => executeSearch()}
           >
-            {isSearching ? "Searching..." : "Search Target"}
+            {isSearching ? "Searching..." : "Search Vehicle"}
           </button>
         </div>
 
@@ -422,10 +475,63 @@ export function VehicleSearch({
                 {activeVehicle.vehicle_type || "Car"}
               </span>
             </div>
-            <div style={{ fontSize: "11px", fontWeight: "600", color: "var(--status-success)" }}>
-              ● TARGET IDENTIFIED
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--status-success)" }}>
+                ● VEHICLE FOUND
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDossierOpen(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  fontSize: "11.5px",
+                  fontWeight: 800,
+                  background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                  border: "none",
+                  color: "#FFFFFF",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(2, 132, 199, 0.35)",
+                  transition: "all 0.15s ease",
+                }}
+                title="Generate Official Investigation Report (Print / Save as PDF)"
+              >
+                <FileText size={13} />
+                <span>Generate Report</span>
+              </button>
             </div>
           </div>
+
+          {/* Cloned / Tampered Plate Detection Alert */}
+          {effectiveFraud?.is_cloned_fraud && (
+            <div
+              style={{
+                background: "#FEF2F2",
+                border: "2px solid #EF4444",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                color: "#991B1B",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+                fontSize: "11.5px",
+                lineHeight: 1.4,
+              }}
+            >
+              <ShieldAlert size={20} color="#DC2626" style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div>
+                <strong style={{ fontSize: "12px", color: "#DC2626" }}>
+                  CRITICAL FRAUD ALERT: CLONED / TAMPERED NUMBER PLATE DETECTED
+                </strong>
+                <div style={{ marginTop: "2px", color: "#7F1D1D" }}>
+                  {effectiveFraud.reason}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Compact Metrics Quad */}
           <div className="profile-metrics-quad">
@@ -437,7 +543,7 @@ export function VehicleSearch({
             </div>
 
             <div className="metric-quad-cell">
-              <span className="quad-label">Observations</span>
+              <span className="quad-label">Sightings</span>
               <strong className="quad-value font-mono">
                 {activeVehicle.observation_count || (activeVehicle.trajectory || []).length || 1}
               </strong>
@@ -458,18 +564,37 @@ export function VehicleSearch({
             </div>
           </div>
 
-          {/* Chronological Camera Journey Stepper inside Search Result */}
+          {/* VAHAN 4.0 NATIONAL RC REGISTRY CARD (PROMINENT TOP PLACEMENT) */}
+          {loadingVahan && !effectiveVahan && (
+            <div
+              style={{
+                padding: "12px",
+                background: "#F8FAFC",
+                borderRadius: "8px",
+                border: "1px dashed #CBD5E1",
+                fontSize: "11.5px",
+                color: "#64748B",
+                textAlign: "center",
+              }}
+            >
+              Connecting to MoRTH VAHAN 4.0 National Registry...
+            </div>
+          )}
+          <VahanCard vahanData={effectiveVahan} defaultExpanded={true} />
+
+          {/* Camera Journey Stepper inside Search Result */}
           {Array.isArray(activeVehicle.trajectory) && activeVehicle.trajectory.length > 0 && (
             <div className="search-trajectory-passage-box">
               <div className="search-passage-header">
                 <span className="search-passage-title">
-                  CHRONOLOGICAL CAMERA PASSAGE ({activeVehicle.trajectory.length} OBSERVATIONS)
+                  CAMERA TRAVEL TIMELINE ({activeVehicle.trajectory.length} SIGHTINGS)
                 </span>
               </div>
               <div className="search-stepper-nodes-row">
                 {activeVehicle.trajectory.map((event, idx) => {
                   const isLast = idx === activeVehicle.trajectory.length - 1;
-                  const cameraId = event.camera_id;
+                  const rawCamId = event.camera_id;
+                  const canonicalCam = normalizeCameraId(rawCamId);
                   const timestamp =
                     event.first_time_sec ??
                     event.timestamp_seconds ??
@@ -477,17 +602,18 @@ export function VehicleSearch({
                     event.start_timestamp ??
                     0;
                   const duration = event.duration_sec ?? event.duration;
-                  const junction = event.junction ?? event.junction_id ?? "Junction";
+                  const cameraTitle = getCanonicalCameraName(canonicalCam, event.camera_name);
+                  const junctionTitle = getCanonicalJunctionName(event.junction_name || event.junction || event.junction_id);
 
                   return (
-                    <div key={`${cameraId}-${idx}`} className="search-stepper-node">
+                    <div key={`${canonicalCam}-${idx}`} className="search-stepper-node">
                       <div className="search-node-badge font-mono">{idx + 1}</div>
                       <div className="search-node-details">
                         <div className="search-node-name">
-                          {event.camera_name || cameraId}
+                          {cameraTitle}
                         </div>
                         <div className="search-node-sub font-mono">
-                          {junction} • {event.vehicle_type || activeVehicle.vehicle_type || "Vehicle"}
+                          {junctionTitle} • {event.vehicle_type || activeVehicle.vehicle_type || "Vehicle"}
                         </div>
                         <div className="search-node-time font-mono">
                           {formatTime(timestamp)}
@@ -499,18 +625,26 @@ export function VehicleSearch({
                         type="button"
                         className="search-node-play-btn font-mono"
                         onClick={() => {
+                          const targetPlate = activeVehicle.plate || activeVehicle.global_vehicle_id;
                           if (onPlayEvent) {
                             onPlayEvent(
-                              cameraId,
+                              canonicalCam,
                               timestamp,
-                              `${activeVehicle.plate || activeVehicle.global_vehicle_id} @ ${cameraId}`
+                              `${targetPlate} @ ${cameraTitle}`,
+                              {
+                                plate: targetPlate,
+                                plate_image: event.plate_image || event.plate_image_url || activeVehicle.plate_image_url,
+                                vehicle_type: event.vehicle_type || activeVehicle.vehicle_type,
+                                isBlacklisted: Boolean(activeVehicle.is_blacklisted || activeVehicle.status === "blacklisted"),
+                                confidence: event.plate_confidence || event.ocr_confidence || 0.96,
+                              }
                             );
                           }
                           if (onFocusCamera) {
-                            onFocusCamera(cameraId);
+                            onFocusCamera(canonicalCam);
                           }
                         }}
-                        title={`Seek ${cameraId} to ${formatTime(timestamp)} and play`}
+                        title={`Seek ${cameraTitle} to ${formatTime(timestamp)} and play evidence`}
                       >
                         <Play size={10} fill="currentColor" />
                         PLAY
@@ -522,6 +656,15 @@ export function VehicleSearch({
             </div>
           )}
         </div>
+      )}
+      {/* OFFICIAL POLICE INVESTIGATION DOSSIER & EVIDENCE MODAL */}
+      {isDossierOpen && activeVehicle && (
+        <PoliceDossierModal
+          isOpen={isDossierOpen}
+          onClose={() => setIsDossierOpen(false)}
+          vehicle={activeVehicle}
+          cameras={cameras}
+        />
       )}
     </div>
   );

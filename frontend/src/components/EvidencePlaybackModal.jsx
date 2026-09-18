@@ -7,15 +7,21 @@ import {
   Clock,
   ShieldAlert,
   ShieldCheck,
-  Scan,
   Volume2,
   VolumeX,
   Maximize2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react";
-import { api } from "../services/api";
+import {
+  api,
+  normalizeCameraId,
+  getCanonicalCameraName,
+  getCanonicalJunctionName,
+} from "../services/api";
 
 const EVIDENCE_PRE_ROLL = 5; // 5 seconds before detection
-const DEFAULT_EVIDENCE_DURATION = 15; // configured short evidence duration (5s pre-roll + 10s post-roll)
+const DEFAULT_EVIDENCE_DURATION = 15; // 15-second concise forensic clip (5s pre-roll + 10s post-roll)
 
 // Format seconds → M:SS
 const fmt = (s) => {
@@ -31,6 +37,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const currentTimeSpanRef = useRef(null);
   const ribbonTimeRef = useRef(null);
   const ribbonEventTagRef = useRef(null);
+  const updateTimelineDOMRef = useRef(null);
+  const activeClipKeyRef = useRef("");
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -38,19 +46,36 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const [autoPaused, setAutoPaused] = useState(false);
   const [showPauseBanner, setShowPauseBanner] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [usingFallbackSrc, setUsingFallbackSrc] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   const hasStartedRef = useRef(false);
   const hasAutoPausedRef = useRef(false);
   const playbackRateRef = useRef(1);
 
-  const timestampSec = Number(eventData?.timestamp) || 0;
-  const clipStartSec = Math.max(0, timestampSec - EVIDENCE_PRE_ROLL);
+  // Normalize camera & timings
+  const rawCamId = eventData?.cameraId || eventData?.camera_id || "junction_A_camera_01";
+  const canonicalCamId = normalizeCameraId(rawCamId);
+  const timestampSec = Number(eventData?.timestamp ?? eventData?.timestamp_sec ?? eventData?.timestamp_seconds) || 0;
+  const actualPreRoll = Math.min(EVIDENCE_PRE_ROLL, timestampSec);
+  const clipStartSec = Math.max(0, timestampSec - actualPreRoll);
   const evidenceDuration = Number(eventData?.evidenceDuration) || DEFAULT_EVIDENCE_DURATION;
   const clipEndSec = clipStartSec + evidenceDuration;
   const effectiveDuration = Math.max(1, clipEndSec - clipStartSec);
-  const markerPct = (EVIDENCE_PRE_ROLL / effectiveDuration) * 100;
+  const targetRelativeSec = Math.max(0, timestampSec - clipStartSec);
+  const markerPct = (targetRelativeSec / effectiveDuration) * 100;
 
-  // Direct DOM updates for zero-lag, non-React re-rendering playback
+  // Canonical names for professional display
+  const canonicalCameraName = getCanonicalCameraName(canonicalCamId, eventData?.cameraName);
+  const canonicalJunctionName = getCanonicalJunctionName(eventData?.junctionName);
+  const targetPlate = eventData?.plate || "TARGET";
+
+  // Primary URL is trimmed faststart clip; fallback is raw camera video stream
+  const primaryVideoUrl = api.getEvidenceClipUrl(canonicalCamId, timestampSec, actualPreRoll, evidenceDuration);
+  const fallbackVideoUrl = api.getCameraVideoUrl(canonicalCamId);
+  const activeVideoUrl = usingFallbackSrc ? fallbackVideoUrl : primaryVideoUrl;
+
+  // Direct DOM updates for zero-lag 60fps seek bar & time ribbon sync
   const updateTimelineDOM = useCallback((relCt) => {
     const absCt = clipStartSec + relCt;
     if (currentTimeSpanRef.current) {
@@ -59,16 +84,38 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     if (ribbonTimeRef.current) {
       ribbonTimeRef.current.textContent = `T+${fmt(absCt)}`;
     }
-    if (ribbonEventTagRef.current) {
-      const showTag = relCt >= EVIDENCE_PRE_ROLL - 0.2 && relCt <= EVIDENCE_PRE_ROLL + 3;
-      ribbonEventTagRef.current.style.display = showTag ? "inline-flex" : "none";
-    }
     if (seekBarRef.current) {
       seekBarRef.current.value = Math.max(0, Math.min(effectiveDuration, relCt));
     }
-  }, [clipStartSec, effectiveDuration]);
 
-  // Escape key listener
+    if (ribbonEventTagRef.current) {
+      if (relCt >= targetRelativeSec - 0.25 && relCt <= targetRelativeSec + 1.2) {
+        ribbonEventTagRef.current.textContent = `⚡ VEHICLE DETECTED • ${targetPlate}`;
+        ribbonEventTagRef.current.style.display = "inline-flex";
+        ribbonEventTagRef.current.style.background = "rgba(239, 68, 68, 0.35)";
+        ribbonEventTagRef.current.style.color = "#fca5a5";
+        ribbonEventTagRef.current.style.borderColor = "rgba(239, 68, 68, 0.6)";
+      } else if (relCt > targetRelativeSec + 1.2) {
+        ribbonEventTagRef.current.textContent = `✓ TARGET SIGHTING RECORDED`;
+        ribbonEventTagRef.current.style.display = "inline-flex";
+        ribbonEventTagRef.current.style.background = "rgba(16, 185, 129, 0.25)";
+        ribbonEventTagRef.current.style.color = "#4ade80";
+        ribbonEventTagRef.current.style.borderColor = "rgba(16, 185, 129, 0.4)";
+      } else {
+        ribbonEventTagRef.current.textContent = `▶ EVIDENCE PLAYBACK (−${Math.round(actualPreRoll)}s PRE-ROLL)`;
+        ribbonEventTagRef.current.style.display = "inline-flex";
+        ribbonEventTagRef.current.style.background = "rgba(2, 132, 199, 0.25)";
+        ribbonEventTagRef.current.style.color = "#38bdf8";
+        ribbonEventTagRef.current.style.borderColor = "rgba(2, 132, 199, 0.4)";
+      }
+    }
+  }, [clipStartSec, effectiveDuration, targetPlate, targetRelativeSec, actualPreRoll]);
+
+  useEffect(() => {
+    updateTimelineDOMRef.current = updateTimelineDOM;
+  }, [updateTimelineDOM]);
+
+  // Escape key listener to close
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e) => {
@@ -78,27 +125,37 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
 
-  // Reset state when modal opens/closes or camera changes
+  // Reset & initialize state when opening modal or switching clip
   useEffect(() => {
     if (!isOpen) {
       if (videoRef.current) {
         videoRef.current.pause();
       }
+      activeClipKeyRef.current = "";
       hasStartedRef.current = false;
       hasAutoPausedRef.current = false;
       setIsPlaying(false);
       setShowPauseBanner(false);
+      setUsingFallbackSrc(false);
+      setVideoError(false);
       return;
     }
+
+    const clipKey = `${canonicalCamId}_${timestampSec}`;
+    if (activeClipKeyRef.current === clipKey) {
+      return;
+    }
+    activeClipKeyRef.current = clipKey;
 
     hasStartedRef.current = false;
     hasAutoPausedRef.current = false;
     setAutoPaused(false);
     setShowPauseBanner(false);
+    setVideoError(false);
+    setUsingFallbackSrc(false);
     setPlaybackRate(1);
     playbackRateRef.current = 1;
 
-    // Check if video element is already ready from browser cache
     const vid = videoRef.current;
     if (vid) {
       vid.playbackRate = 1;
@@ -107,36 +164,55 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
       }
       if (vid.readyState >= 2 && !hasStartedRef.current) {
         hasStartedRef.current = true;
-        vid.currentTime = 0;
-        updateTimelineDOM(0);
+        vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
+        updateTimelineDOMRef.current?.(0);
         vid.play().then(() => setIsPlaying(true)).catch(() => {});
       }
     }
-  }, [isOpen, eventData?.cameraId, timestampSec, updateTimelineDOM]);
+  }, [isOpen, canonicalCamId, timestampSec, clipStartSec, usingFallbackSrc]);
+
+  // High-frequency animation tick during active playback (60 FPS millisecond precision)
+  useEffect(() => {
+    if (!isOpen) return;
+    let animId;
+    const tick = () => {
+      const vid = videoRef.current;
+      if (vid && !vid.paused) {
+        const currentRel = usingFallbackSrc
+          ? Math.max(0, vid.currentTime - clipStartSec)
+          : vid.currentTime;
+        updateTimelineDOM(currentRel);
+
+        // Instantaneous 60fps check: freeze video the millisecond target reaches the yellow marker
+        if (!hasAutoPausedRef.current && currentRel >= targetRelativeSec) {
+          hasAutoPausedRef.current = true;
+          vid.pause();
+          const pauseSeek = usingFallbackSrc ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
+          vid.currentTime = pauseSeek;
+          setIsPlaying(false);
+          setAutoPaused(true);
+          setShowPauseBanner(true);
+          updateTimelineDOM(targetRelativeSec);
+        }
+      }
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [isOpen, usingFallbackSrc, clipStartSec, targetRelativeSec, updateTimelineDOM]);
 
   if (!isOpen || !eventData) return null;
 
   const {
-    cameraId,
-    cameraName = cameraId,
-    junctionName = "Traffic Junction",
-    plate = "UNKNOWN",
+    plate = "TARGET",
     plateImage,
     vehicleType = "car",
-    confidence = 0.92,
+    confidence = 0.96,
     isBlacklisted = false,
     reason = "",
   } = eventData;
 
-  const defaultBbox = { x: 38, y: 44, width: 24, height: 26 };
-  const targetBbox =
-    eventData.bbox && typeof eventData.bbox.x === "number"
-      ? eventData.bbox
-      : defaultBbox;
-
   const confPercent = Math.round(confidence <= 1 ? confidence * 100 : confidence);
-  // Server-side trimmed & faststart cached evidence clip (only 15 seconds long)
-  const videoUrl = api.getEvidenceClipUrl(cameraId, timestampSec, EVIDENCE_PRE_ROLL, evidenceDuration);
 
   let imageUrl = null;
   if (plateImage) {
@@ -145,66 +221,63 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
       : api.getPlateImageUrl(plateImage);
   }
 
-  // ── Video event handlers ──
-  const handleLoadedMetadata = () => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    setVideoReady(true);
-  };
-
-  const handleLoadedData = () => {
-    setVideoReady(true);
-  };
-
+  // ── Video Event Handlers ──
   const handleCanPlay = () => {
     const vid = videoRef.current;
     if (!vid) return;
     setVideoReady(true);
+    setVideoError(false);
 
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
     vid.playbackRate = playbackRateRef.current;
+    const initialTime = usingFallbackSrc ? clipStartSec : 0;
+    vid.currentTime = initialTime;
     updateTimelineDOM(0);
 
     vid.play().then(() => setIsPlaying(true)).catch((e) => {
-      console.warn("[EvidencePlayback] Autoplay notice:", e);
+      console.warn("[EvidencePlayback] Autoplay blocked by browser (user can click play):", e);
     });
   };
 
-  const handleSeeked = () => {
-    setVideoReady(true);
-  };
-
-  const handlePlaying = () => {
-    setVideoReady(true);
-    setIsPlaying(true);
-  };
-
-  const handleError = (e) => {
-    console.error("[EvidencePlayback] Video error:", e);
-    setVideoReady(true);
+  const handleVideoError = (e) => {
+    console.warn("[EvidencePlayback] Primary evidence clip error, falling back to full camera feed:", e);
+    if (!usingFallbackSrc) {
+      setUsingFallbackSrc(true);
+      setVideoReady(false);
+      hasStartedRef.current = false;
+    } else {
+      setVideoError(true);
+      setVideoReady(true);
+    }
   };
 
   const handleTimeUpdate = () => {
     const vid = videoRef.current;
     if (!vid) return;
-    const relCt = vid.currentTime;
 
-    // Auto-pause when vehicle reaches detection moment (5 seconds into the trimmed clip)
-    if (!hasAutoPausedRef.current && !vid.paused && relCt >= EVIDENCE_PRE_ROLL) {
+    const relCt = usingFallbackSrc
+      ? Math.max(0, vid.currentTime - clipStartSec)
+      : vid.currentTime;
+
+    // ── AUTO-PAUSE: WHEN SELECTED VEHICLE REACHES MAIN FRAME (EXACT YELLOW MARKER) ──
+    if (!hasAutoPausedRef.current && !vid.paused && relCt >= targetRelativeSec) {
       hasAutoPausedRef.current = true;
       vid.pause();
+      const pauseSeek = usingFallbackSrc ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
+      vid.currentTime = pauseSeek;
       setIsPlaying(false);
       setAutoPaused(true);
       setShowPauseBanner(true);
-      updateTimelineDOM(EVIDENCE_PRE_ROLL);
+      updateTimelineDOM(targetRelativeSec);
       return;
     }
 
-    // Boundary: end of evidence clip
+    // End of 15-second evidence clip boundary
     if (relCt >= effectiveDuration) {
-      vid.currentTime = effectiveDuration;
+      const finalSeek = usingFallbackSrc ? clipStartSec + effectiveDuration : effectiveDuration;
+      vid.currentTime = finalSeek;
       vid.pause();
       setIsPlaying(false);
       updateTimelineDOM(effectiveDuration);
@@ -218,9 +291,12 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     const vid = videoRef.current;
     if (!vid) return;
     if (vid.paused) {
-      // If at or near clip end, replay from start of evidence clip
-      if (vid.currentTime >= effectiveDuration - 0.1) {
-        vid.currentTime = 0;
+      const relCt = usingFallbackSrc
+        ? Math.max(0, vid.currentTime - clipStartSec)
+        : vid.currentTime;
+      // If at end of clip, restart from beginning
+      if (relCt >= effectiveDuration - 0.1) {
+        vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
         hasAutoPausedRef.current = false;
       }
       setAutoPaused(false);
@@ -238,17 +314,28 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     handlePlayPause();
   };
 
+  const handleReplayFromStart = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
+    hasAutoPausedRef.current = false;
+    setAutoPaused(false);
+    setShowPauseBanner(false);
+    updateTimelineDOM(0);
+    vid.play().then(() => setIsPlaying(true)).catch(() => {});
+  };
+
   const handleSeekBar = (e) => {
     const vid = videoRef.current;
     if (!vid) return;
     const offset = parseFloat(e.target.value);
-    const target = Math.max(0, Math.min(effectiveDuration, offset));
-    vid.currentTime = target;
-    // If seeked before detection, re-arm auto-pause
-    if (target < EVIDENCE_PRE_ROLL) {
+    const targetRel = Math.max(0, Math.min(effectiveDuration, offset));
+    vid.currentTime = usingFallbackSrc ? clipStartSec + targetRel : targetRel;
+    // If seeked before detection moment, re-arm auto-pause
+    if (targetRel < EVIDENCE_PRE_ROLL - 0.2) {
       hasAutoPausedRef.current = false;
     }
-    updateTimelineDOM(target);
+    updateTimelineDOM(targetRel);
   };
 
   const handleSpeedChange = (e) => {
@@ -285,7 +372,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
         <div className="evidence-modal-header">
           <div className="evidence-header-title-wrap">
             <div className="evidence-lead-badge font-mono">
-              <Scan size={13} className="spin-slow" />
+              <Clock size={13} />
               <span>FORENSIC CCTV AUDIT • EVIDENCE PLAYBACK</span>
             </div>
             <h2 className="evidence-modal-main-title">
@@ -300,7 +387,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
         {/* ── BODY (2-col) ── */}
         <div className="ev2-body">
 
-          {/* ── LEFT: CCTV VIDEO PLAYER ── */}
+          {/* ── LEFT: CCTV VIDEO PLAYER (CLEAN — NO BOUNDING BOXES) ── */}
           <div className="ev2-video-col">
             <div className="ev2-video-wrapper">
 
@@ -310,45 +397,120 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
               {/* Status ribbon */}
               <div className="ev2-status-ribbon font-mono">
                 <span className="ev2-rec-dot" />
-                <span>REC • {cameraName}</span>
+                <span>REC • {canonicalCameraName}</span>
                 <span className="ev2-ribbon-sep">•</span>
                 <span ref={ribbonTimeRef}>T+{fmt(clipStartSec)}</span>
                 <span ref={ribbonEventTagRef} className="ev2-event-tag" style={{ display: "none" }}>
-                  ⚡ EVENT DETECTED
+                  ▶ EVIDENCE PLAYBACK
                 </span>
               </div>
 
-              {/* THE VIDEO ELEMENT (Lightweight server-side trimmed clip) */}
+              {/* FORENSIC INTELLIGENCE STATUS BAR */}
+              <div className="ev2-ai-vision-toolbar font-mono">
+                <div className="ev2-ai-chip">
+                  <span className="ev2-ai-dot" />
+                  <span>CCTV SIGHTING REPLAY</span>
+                </div>
+
+                <div className="ev2-target-locked-badge">
+                  <span>🎯 TARGET: <strong>{plate}</strong></span>
+                </div>
+
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "11px", color: autoPaused ? "#f87171" : "#4ade80", fontWeight: 700 }}>
+                    {autoPaused ? "⚡ SIGHTING MOMENT PAUSED" : "● AUTO-PAUSE ARMED (T+5s)"}
+                  </span>
+                </div>
+              </div>
+
+              {/* THE VIDEO ELEMENT (Pristine CCTV evidence clip without bounding boxes) */}
               <video
                 ref={videoRef}
-                src={videoUrl}
+                src={activeVideoUrl}
                 className="ev2-video"
                 muted={isMuted}
                 playsInline
                 preload="auto"
-                onLoadedMetadata={handleLoadedMetadata}
-                onLoadedData={handleLoadedData}
+                onLoadedMetadata={() => setVideoReady(true)}
+                onLoadedData={() => setVideoReady(true)}
                 onCanPlay={handleCanPlay}
-                onSeeked={handleSeeked}
-                onPlaying={handlePlaying}
-                onError={handleError}
+                onPlaying={() => {
+                  setVideoReady(true);
+                  setIsPlaying(true);
+                }}
+                onError={handleVideoError}
                 onTimeUpdate={handleTimeUpdate}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
               />
 
               {/* Loading overlay */}
-              {!videoReady && (
+              {!videoReady && !videoError && (
                 <div className="ev2-loading-overlay font-mono">
                   <div className="ev2-loading-spinner" />
                   <span>Loading CCTV evidence clip…</span>
                 </div>
               )}
 
-              {/* AUTO-PAUSE POPUP / BADGE:
-                  Can be dismissed with ✕ or by clicking outside to inspect the clean paused frame.
-                  Dismissing does NOT resume video.
-                  Only pressing Play on controls (or RESUME here) resumes playback. */}
+              {/* Error overlay with reload option */}
+              {videoError && (
+                <div className="ev2-loading-overlay font-mono" style={{ background: "rgba(10, 15, 29, 0.95)" }}>
+                  <AlertTriangle size={32} color="#EF4444" style={{ marginBottom: "8px" }} />
+                  <span style={{ color: "#FCA5A5", fontWeight: 700 }}>CCTV feed stream notice</span>
+                  <p style={{ fontSize: "12px", color: "#94A3B8", marginTop: "4px" }}>
+                    Camera node {canonicalCameraName} stream is buffering.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleReplayFromStart}
+                    className="ev2-resume-btn font-mono"
+                    style={{ marginTop: "12px" }}
+                  >
+                    <RotateCcw size={13} />
+                    <span>RETRY PLAYBACK</span>
+                  </button>
+                </div>
+              )}
+
+              {/* CLICK-TO-PLAY OVERLAY (If browser restricted initial autoplay) */}
+              {videoReady && !isPlaying && !autoPaused && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(0, 0, 0, 0.25)",
+                    cursor: "pointer",
+                    zIndex: 10,
+                  }}
+                  onClick={handlePlayPause}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "rgba(2, 132, 199, 0.9)",
+                      color: "#FFFFFF",
+                      padding: "10px 20px",
+                      borderRadius: "24px",
+                      fontWeight: 800,
+                      fontSize: "13px",
+                      boxShadow: "0 4px 16px rgba(2, 132, 199, 0.5)",
+                    }}
+                    className="font-mono"
+                  >
+                    <Play size={16} fill="currentColor" />
+                    <span>PLAY EVIDENCE CLIP</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── AUTO-PAUSE POPUP / BADGE (EXACTLY WHEN VEHICLE APPEARS IN FRAME) ──
+                  Dismissible with ✕ or by clicking outside so operator can inspect paused vehicle.
+                  Dismissing keeps video paused. Only clicking RESUME or Play resumes playback. */}
               {autoPaused && showPauseBanner && (
                 <div
                   className="ev2-auto-pause-overlay"
@@ -363,9 +525,9 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
                       <Pause size={18} />
                     </div>
                     <div className="ev2-pause-text">
-                      <span className="ev2-pause-headline">⌖ VEHICLE DETECTED</span>
+                      <span className="ev2-pause-headline">⚡ VEHICLE DETECTED</span>
                       <span className="ev2-pause-sub">
-                        Auto-paused at T+{fmt(timestampSec)} • Sighting Moment
+                        Target [{plate}] appeared in main frame at T+{fmt(timestampSec)}
                       </span>
                     </div>
                     <button
@@ -396,7 +558,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
                   type="button"
                   className="ev2-ctrl-btn"
                   onClick={handlePlayPause}
-                  title={isPlaying ? "Pause" : "Play / Resume (Click to continue playback)"}
+                  title={isPlaying ? "Pause" : "Play / Resume"}
                 >
                   {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
                 </button>
@@ -420,7 +582,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
                   <div
                     className="ev2-event-marker"
                     style={{ left: `${markerPct}%` }}
-                    title={`Detection at T+${fmt(timestampSec)}`}
+                    title={`Detection moment at T+${fmt(timestampSec)}`}
                   />
                 </div>
 
@@ -465,7 +627,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
             {/* Caption */}
             <div className="ev2-video-caption font-mono">
               ▶ Playing from T+{fmt(clipStartSec)} &nbsp;│&nbsp; Detection at T+{fmt(timestampSec)}&nbsp;
-              <span style={{ color: "#22c55e" }}>(−5 s pre-roll)</span>
+              <span style={{ color: "#22c55e" }}>(−{Math.round(actualPreRoll)}s pre-roll)</span>
               &nbsp;│&nbsp; Evidence Clip ({effectiveDuration}s)
             </div>
           </div>
@@ -473,7 +635,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
           {/* ── RIGHT: META PANEL ── */}
           <div className="ev2-meta-col">
 
-            {/* Blacklist alert */}
+            {/* Blacklist alert or Verified Sighting */}
             {isBlacklisted ? (
               <div className="evidence-blacklist-alert-box">
                 <ShieldAlert size={18} className="alert-red-icon" />
@@ -516,11 +678,11 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
             <div className="evidence-specs-grid font-mono">
               <div className="spec-item">
                 <span className="spec-lbl">JUNCTION / CORRIDOR</span>
-                <span className="spec-val highlight-title">{junctionName}</span>
+                <span className="spec-val highlight-title">{canonicalJunctionName}</span>
               </div>
               <div className="spec-item">
                 <span className="spec-lbl">CAMERA NODE</span>
-                <span className="spec-val">{cameraName}</span>
+                <span className="spec-val">{canonicalCameraName}</span>
               </div>
               <div className="spec-item">
                 <span className="spec-lbl">DETECTION TIME</span>
@@ -535,9 +697,15 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
                 <span className="spec-val spec-capitalize">{vehicleType}</span>
               </div>
               <div className="spec-item">
-                <span className="spec-lbl">BBOX (% FRAME)</span>
-                <span className="spec-val" style={{ fontSize: "10px" }}>
-                  X:{targetBbox.x}% Y:{targetBbox.y}% W:{targetBbox.width}% H:{targetBbox.height}%
+                <span className="spec-lbl">EVIDENCE STATUS</span>
+                <span className="spec-val highlight-green" style={{ fontSize: "10px" }}>
+                  Verified Active CCTV Clip
+                </span>
+              </div>
+              <div className="spec-item">
+                <span className="spec-lbl">DETECTION ACTION</span>
+                <span className="spec-val" style={{ fontSize: "10px", color: "#38bdf8" }}>
+                  Auto-Pause on Arrival
                 </span>
               </div>
             </div>

@@ -10,6 +10,10 @@ import {
   MapPin,
   Car,
   ChevronRight,
+  Flame,
+  Activity,
+  Printer,
+  FileText,
 } from "lucide-react";
 import {
   MapContainer,
@@ -17,11 +21,13 @@ import {
   Marker,
   Popup,
   Polyline,
+  Circle,
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { formatTime } from "../services/api";
+import { PoliceDossierModal } from "./PoliceDossierModal";
 
 const JUNCTION_COORDINATES = {
   junction_A: { lat: 23.710299, lng: 86.952779 },
@@ -114,6 +120,8 @@ export function FullMapModal({
   onPlayEvent,
 }) {
   const [focusedCoord, setFocusedCoord] = useState(null);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [isDossierOpen, setIsDossierOpen] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -213,15 +221,15 @@ export function FullMapModal({
         {/* HEADER */}
         <div className="modal-header-strip full-map-header">
           <div>
-            <div className="section-eyebrow">Interactive Geospatial Command Matrix</div>
+            <div className="section-eyebrow">City Map & Route Tracker</div>
             <div className="full-map-title-row">
               <h2 className="full-map-heading">
-                City Surveillance Corridor & Target Trajectory
+                City Map & Vehicle Route Tracking
               </h2>
               {selectedVehicle && (
                 <div className="full-map-target-chip font-mono">
                   <span className="target-chip-dot"></span>
-                  <span>TARGET: {selectedVehicle.plate || selectedVehicle.plate_number || selectedVehicle.normalized_plate || selectedVehicle.global_vehicle_id}</span>
+                  <span>VEHICLE: {selectedVehicle.plate || selectedVehicle.plate_number || selectedVehicle.normalized_plate || selectedVehicle.global_vehicle_id}</span>
                   <span className="target-chip-sep">•</span>
                   <span>{trajectoryPoints.length} SIGHTINGS</span>
                   {selectedVehicle.estimated_average_speed_label && (
@@ -235,14 +243,66 @@ export function FullMapModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            className="modal-close-icon-btn"
-            onClick={onClose}
-            title="Close Fullscreen Map (Esc)"
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              type="button"
+              onClick={() => setShowHeatmap(!showHeatmap)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                borderRadius: "6px",
+                border: showHeatmap ? "1.5px solid #DC2626" : "1px solid var(--border-default, #cbd5e1)",
+                background: showHeatmap ? "rgba(220, 38, 38, 0.12)" : "var(--bg-canvas-subtle, #f8fafc)",
+                color: showHeatmap ? "#DC2626" : "var(--text-primary, #0f172a)",
+                fontWeight: 700,
+                fontSize: "12px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                boxShadow: showHeatmap ? "0 0 10px rgba(220, 38, 38, 0.25)" : "none",
+              }}
+              title="Toggle City-Wide Traffic Density Heatmap"
+            >
+              <Flame size={14} style={{ color: showHeatmap ? "#DC2626" : "var(--text-muted)" }} />
+              <span>{showHeatmap ? "HEATMAP: ACTIVE" : "TRAFFIC HEATMAP"}</span>
+            </button>
+
+            {selectedVehicle && (
+              <button
+                type="button"
+                onClick={() => setIsDossierOpen(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 14px",
+                  borderRadius: "6px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                  color: "#ffffff",
+                  fontWeight: 800,
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(2, 132, 199, 0.35)",
+                  transition: "all 0.15s ease",
+                }}
+                title="Generate Official Investigation Report (Print / Save PDF)"
+              >
+                <FileText size={14} />
+                <span>GENERATE REPORT</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="modal-close-icon-btn"
+              onClick={onClose}
+              title="Close Fullscreen Map (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* BODY SPLIT: LARGE MAP (LEFT) + TIMELINE DETAILS (RIGHT) */}
@@ -258,6 +318,45 @@ export function FullMapModal({
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
+
+              {/* TRAFFIC DENSITY HEATMAP LAYER */}
+              {showHeatmap && cameraMarkers.map((cam) => (
+                <React.Fragment key={`heatmap-${cam.id}`}>
+                  {/* Outer Dissipation Zone */}
+                  <Circle
+                    center={[cam.lat, cam.lng]}
+                    radius={110}
+                    pathOptions={{
+                      color: "#DC2626",
+                      fillColor: "#DC2626",
+                      fillOpacity: 0.14,
+                      weight: 0,
+                    }}
+                  />
+                  {/* Mid Density Ring */}
+                  <Circle
+                    center={[cam.lat, cam.lng]}
+                    radius={65}
+                    pathOptions={{
+                      color: "#D97706",
+                      fillColor: "#D97706",
+                      fillOpacity: 0.26,
+                      weight: 0,
+                    }}
+                  />
+                  {/* Core Hotspot */}
+                  <Circle
+                    center={[cam.lat, cam.lng]}
+                    radius={30}
+                    pathOptions={{
+                      color: "#EF4444",
+                      fillColor: "#EF4444",
+                      fillOpacity: 0.45,
+                      weight: 1,
+                    }}
+                  />
+                </React.Fragment>
+              ))}
 
               {/* RED TRAJECTORY LINE */}
               {trajectoryPoints.length > 1 && (
@@ -349,10 +448,10 @@ export function FullMapModal({
             </div>
           </div>
 
-          {/* RIGHT: CHRONOLOGICAL DETAILS & PLAY EVENT ACTION LIST */}
+          {/* RIGHT: CAMERA SIGHTINGS & PLAY EVENT ACTION LIST */}
           <div className="full-map-timeline-sidebar">
             <div className="full-map-sidebar-header">
-              <span className="sidebar-header-title">Chronological Sighting Records</span>
+              <span className="sidebar-header-title">Camera Sighting Timeline</span>
               <span className="sidebar-header-count font-mono">
                 {trajectoryPoints.length} SIGHTING{trajectoryPoints.length === 1 ? "" : "S"}
               </span>
@@ -488,6 +587,16 @@ export function FullMapModal({
           </div>
         </div>
       </div>
+
+      {/* OFFICIAL POLICE INVESTIGATION DOSSIER MODAL */}
+      {isDossierOpen && selectedVehicle && (
+        <PoliceDossierModal
+          isOpen={isDossierOpen}
+          onClose={() => setIsDossierOpen(false)}
+          vehicle={selectedVehicle}
+          cameras={cameras}
+        />
+      )}
     </div>,
     document.body
   );

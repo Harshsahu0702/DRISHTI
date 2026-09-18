@@ -8,12 +8,12 @@ export function JourneyTimeline({ selectedVehicle, onPlayEvent, onFocusCamera })
       <div className="timeline-stepper-card">
         <div className="timeline-stepper-header">
           <div>
-            <div className="section-eyebrow">Corridor Trajectory</div>
-            <h3 className="section-main-heading" style={{ fontSize: "16px" }}>Chronological Camera Journey</h3>
+            <div className="section-eyebrow">Vehicle Travel Route</div>
+            <h3 className="section-main-heading" style={{ fontSize: "16px" }}>Camera Travel Timeline</h3>
           </div>
         </div>
         <div style={{ color: "var(--text-muted)", fontSize: "13px", padding: "12px 0" }}>
-          Search for a vehicle above or select one from the registry to reconstruct its cross-camera journey passage.
+          Search for a vehicle above or pick one from the list to see its camera journey.
         </div>
       </div>
     );
@@ -25,15 +25,15 @@ export function JourneyTimeline({ selectedVehicle, onPlayEvent, onFocusCamera })
     <div className="timeline-stepper-card">
       <div className="timeline-stepper-header">
         <div>
-          <div className="section-eyebrow">Corridor Trajectory Passage</div>
+          <div className="section-eyebrow">Vehicle Travel Route</div>
           <h3 className="section-main-heading" style={{ fontSize: "16px" }}>
-            Chronological Camera Journey:{" "}
+            Camera Travel Timeline:{" "}
             <span className="font-mono" style={{ color: "var(--drishti-blue)" }}>
               {selectedVehicle.plate || selectedVehicle.global_vehicle_id}
             </span>
           </h3>
           <p className="section-subtext">
-            {trajectory.length} camera observation{trajectory.length === 1 ? "" : "s"} across {selectedVehicle.junction_count || 1} junction{selectedVehicle.junction_count === 1 ? "" : "s"}.
+            {trajectory.length} camera sighting{trajectory.length === 1 ? "" : "s"} across {selectedVehicle.junction_count || 1} junction{selectedVehicle.junction_count === 1 ? "" : "s"}.
           </p>
         </div>
       </div>

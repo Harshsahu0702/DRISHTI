@@ -148,6 +148,16 @@ def build_journey_for_plate(plate_str: str, matching_detections: List[Dict[str, 
     best_vtype = sorted_dets[0].get("vehicle_type", "car") if sorted_dets else "car"
     raw_plate = sorted_dets[0].get("raw_plate", plate_str) if sorted_dets else plate_str
 
+    is_real_plate = bool(
+        plate_str
+        and not plate_str.startswith("TRACK_")
+        and "_trk" not in plate_str
+        and not plate_str.startswith("junction_")
+    )
+    actual_plate = plate_str if is_real_plate else None
+    actual_raw_plate = raw_plate if is_real_plate else None
+    display_gid = plate_str.replace("TRACK_", "") if plate_str.startswith("TRACK_") else plate_str
+
     avg_speed = round(sum(journey_speeds) / len(journey_speeds), 1) if journey_speeds else None
     avg_speed_label = f"{avg_speed} km/h" if avg_speed is not None else "N/A"
 
@@ -156,14 +166,14 @@ def build_journey_for_plate(plate_str: str, matching_detections: List[Dict[str, 
 
     return {
         "found": True,
-        "plate": plate_str,
-        "raw_plate": raw_plate,
+        "plate": actual_plate,
+        "raw_plate": actual_raw_plate,
         "vehicle_type": best_vtype,
-        "global_vehicle_id": plate_str,
+        "global_vehicle_id": display_gid,
         "camera_count": len(unique_cams),
         "junction_count": len(unique_juncs),
         "observation_count": len(events),
-        "has_plate": bool(plate_str and not plate_str.startswith("TRACK_")),
+        "has_plate": is_real_plate,
         "cameras": unique_cams,
         "camera_ids": unique_cams,
         "junctions": unique_juncs,
@@ -253,7 +263,11 @@ def get_cached_all_vehicles() -> List[Dict[str, Any]]:
 
     grouped = defaultdict(list)
     for d in all_dets:
-        key = d.get("plate") or f"{d.get('camera_id')}_trk{d.get('vehicle_track_id')}"
+        p = d.get("plate")
+        if p and str(p).strip():
+            key = str(p).strip()
+        else:
+            key = f"TRACK_{d.get('camera_id')}_trk{d.get('vehicle_track_id')}"
         grouped[key].append(d)
 
     built = []
@@ -325,20 +339,22 @@ def get_all_vehicles_list(
 
     # Sorting
     if sort_by == "observations":
-        vehicles.sort(key=lambda x: x["observation_count"], reverse=True)
+        vehicles.sort(key=lambda x: (1 if x.get("has_plate") else 0, x.get("observation_count", 1)), reverse=True)
     elif sort_by == "cameras":
-        vehicles.sort(key=lambda x: x["camera_count"], reverse=True)
+        vehicles.sort(key=lambda x: (1 if x.get("has_plate") else 0, x.get("camera_count", 1)), reverse=True)
     elif sort_by == "first_seen":
         vehicles.sort(key=lambda x: x.get("first_seen", 0.0))
     elif sort_by == "plate":
-        vehicles.sort(key=lambda x: x["plate"])
+        vehicles.sort(key=lambda x: (not x.get("has_plate", False), (x.get("plate") or x.get("global_vehicle_id") or "")))
     else:
-        # Default: multi-camera vehicles first, then ANPR plates, then observation count
+        # Default: All Recognized ANPR plates FIRST (105 real plates = pages 1-7)
+        # Within plates: cross-camera verified first, then highest observation count
+        # Unplated tracks follow after all recognized license plates
         vehicles.sort(
             key=lambda x: (
-                x["camera_count"] > 1,
-                x["has_plate"],
-                x["observation_count"]
+                1 if x.get("has_plate") else 0,
+                1 if x.get("camera_count", 1) > 1 else 0,
+                x.get("observation_count", 1)
             ),
             reverse=True
         )

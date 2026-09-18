@@ -36,14 +36,21 @@ except ImportError:
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-DB_NAME = os.getenv("DB_NAME", "sih_traffic_intelligence")
-
-encoded_password = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{encoded_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+raw_db_url = os.getenv("DATABASE_URL") or os.getenv("MYSQL_URL")
+if raw_db_url:
+    # Ensure pymysql dialect driver prefix for SQLAlchemy
+    if raw_db_url.startswith("mysql://"):
+        DATABASE_URL = raw_db_url.replace("mysql://", "mysql+pymysql://", 1)
+    else:
+        DATABASE_URL = raw_db_url
+else:
+    DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+    DB_PORT = os.getenv("DB_PORT", "3306")
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    DB_NAME = os.getenv("DB_NAME", "sih_traffic_intelligence")
+    encoded_password = quote_plus(DB_PASSWORD) if DB_PASSWORD else ""
+    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{encoded_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 Base = declarative_base()
 

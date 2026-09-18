@@ -113,23 +113,23 @@ function normalizeObservation(observation = {}, index = 0) {
     null
   );
 
+  const canonicalCamId = normalizeCameraId(cameraId);
+  const canonicalCamName = getCanonicalCameraName(
+    canonicalCamId,
+    firstDefined(observation.camera_name, observation.camera, cameraId)
+  );
+  const canonicalJuncName = getCanonicalJunctionName(
+    junctionId || observation.junction_name || observation.junction
+  );
+
   return {
     ...observation,
 
-    camera_id: cameraId,
+    camera_id: canonicalCamId,
     junction_id: junctionId,
 
-    camera_name: firstDefined(
-      observation.camera_name,
-      observation.camera,
-      cameraId
-    ),
-
-    junction_name: firstDefined(
-      observation.junction_name,
-      observation.junction,
-      junctionId
-    ),
+    camera_name: canonicalCamName,
+    junction_name: canonicalJuncName,
 
     timestamp: timestamp,
     timestamp_seconds: timestampSeconds,
@@ -395,7 +395,23 @@ export const api = {
 
   getCameras: async () => {
     try {
-      return await request("/api/cameras");
+      const data = await request("/api/cameras");
+      const normalized = {};
+      if (typeof data === "object" && data !== null) {
+        Object.entries(data).forEach(([key, cam]) => {
+          const normKey = normalizeCameraId(key);
+          normalized[normKey] = {
+            ...cam,
+            id: normKey,
+            camera_id: normKey,
+            name: getCanonicalCameraName(normKey, cam.camera_name || cam.name),
+            camera_name: getCanonicalCameraName(normKey, cam.camera_name || cam.name),
+            junction_name: getCanonicalJunctionName(cam.junction_name || cam.scene),
+            scene: getCanonicalJunctionName(cam.scene || cam.junction_name),
+          };
+        });
+      }
+      return normalized;
     } catch (error) {
       console.warn("[Cameras] Backend unavailable:", error);
       return {};
@@ -547,6 +563,22 @@ export const api = {
       console.warn("[DB Status] Unavailable:", error);
       return { status: "disconnected" };
     }
+  },
+
+  /* -------------------------------------------------------
+     BEL SPECIALIZED SERVICES (SECTION 65B & SIGNAL ADVISOR)
+  ------------------------------------------------------- */
+
+  getEvidenceCertificate: async (plate) => {
+    return await request(`/api/vehicles/${encodeURIComponent(plate)}/evidence-certificate`);
+  },
+
+  getSignalRecommendations: async () => {
+    return await request("/api/traffic/signal-recommendations");
+  },
+
+  getHealthSummary: async () => {
+    return await request("/api/system/health-summary");
   },
 
   /* -------------------------------------------------------
@@ -754,11 +786,25 @@ export const api = {
      CAMERA VIDEO & EVIDENCE
   ------------------------------------------------------- */
 
-  getCameraVideoUrl: (cameraId, quality = "high") =>
-    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/video${quality !== "high" ? `?quality=${quality}` : ""}`,
+  getCameraVideoUrl: (cameraId, quality = "high") => {
+    const norm = normalizeCameraId(cameraId);
+    return `${API_BASE}/api/cameras/${encodeURIComponent(norm)}/video${quality !== "high" ? `?quality=${quality}` : ""}`;
+  },
 
-  getEvidenceClipUrl: (cameraId, timestamp, preRoll = 5, duration = 15) =>
-    `${API_BASE}/api/cameras/${encodeURIComponent(cameraId)}/evidence?timestamp=${timestamp}&pre_roll=${preRoll}&duration=${duration}`,
+  getEvidenceClipUrl: (cameraId, timestamp, preRoll = 5, duration = 15) => {
+    const norm = normalizeCameraId(cameraId);
+    const t = Math.max(0, Math.round(Number(timestamp) || 0));
+    return `${API_BASE}/api/cameras/${encodeURIComponent(norm)}/evidence?timestamp=${t}&pre_roll=${preRoll}&duration=${duration}`;
+  },
+
+  getEvidenceYoloTracks: (cameraId, timestamp, plate, preRoll = 5, duration = 15) => {
+    const norm = normalizeCameraId(cameraId);
+    const t = Math.max(0, Math.round(Number(timestamp) || 0));
+    return request(
+      `/api/cameras/${encodeURIComponent(norm)}/yolo-tracks?timestamp=${t}&plate=${encodeURIComponent(plate || "")}&pre_roll=${preRoll}&duration=${duration}`
+    );
+  },
+
 
   /* -------------------------------------------------------
      MAP BACKGROUND
@@ -851,6 +897,69 @@ export const api = {
       return [];
     }
   },
+
+  /* =========================================================
+     ENTERPRISE FEATURES: VAHAN, INTERCEPTION & E-CHALLAN
+  ========================================================= */
+  async getVahanDetails(plate, vehicleType = "Car") {
+    try {
+      const cleanPlate = encodeURIComponent(String(plate).trim());
+      const vtypeParam = vehicleType ? `?vehicle_type=${encodeURIComponent(vehicleType)}` : "";
+      return await request(`/api/vehicles/${cleanPlate}/vahan${vtypeParam}`);
+    } catch (error) {
+      console.warn(`[API] getVahanDetails failed for ${plate}:`, error);
+      return null;
+    }
+  },
+
+  async getInterceptionData(plate, lastCameraId = null, speedKmh = null) {
+    try {
+      const cleanPlate = encodeURIComponent(String(plate).trim());
+      let url = `/api/vehicles/${cleanPlate}/interception`;
+      const params = [];
+      if (lastCameraId) params.push(`last_camera_id=${encodeURIComponent(lastCameraId)}`);
+      if (speedKmh) params.push(`speed_kmh=${speedKmh}`);
+      if (params.length > 0) url += `?${params.join("&")}`;
+      return await request(url);
+    } catch (error) {
+      console.warn(`[API] getInterceptionData failed for ${plate}:`, error);
+      return null;
+    }
+  },
+
+  async dispatchPcrUnit(payload) {
+    try {
+      return await request("/api/interception/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.warn("[API] dispatchPcrUnit failed:", error);
+      throw error;
+    }
+  },
+
+  async getEChallanData(plate, speed = null) {
+    try {
+      const cleanPlate = encodeURIComponent(String(plate).trim());
+      const url = speed ? `/api/vehicles/${cleanPlate}/echallan?speed=${speed}` : `/api/vehicles/${cleanPlate}/echallan`;
+      return await request(url);
+    } catch (error) {
+      console.warn(`[API] getEChallanData failed for ${plate}:`, error);
+      return null;
+    }
+  },
+
+  async getFraudCheck(plate) {
+    try {
+      const cleanPlate = encodeURIComponent(String(plate).trim());
+      return await request(`/api/vehicles/${cleanPlate}/fraud-check`);
+    } catch (error) {
+      console.warn(`[API] getFraudCheck failed for ${plate}:`, error);
+      return null;
+    }
+  },
 };
 
 /* =========================================================
@@ -909,6 +1018,52 @@ export function formatPercent(value) {
   return number <= 1
     ? `${(number * 100).toFixed(1)}%`
     : `${number.toFixed(1)}%`;
+}
+
+export function normalizeCameraId(cameraId) {
+  if (!cameraId) return "junction_A_camera_01";
+  const c = String(cameraId).trim();
+  const cLower = c.toLowerCase().replace(/[\s\-]/g, "_");
+  if (cLower.includes("a_camera_01") || cLower.includes("a_camera_1") || cLower === "camera_01" || cLower === "camera_1" || cLower === "c01" || cLower === "a_c01" || cLower === "a_c1") {
+    return "junction_A_camera_01";
+  }
+  if (cLower.includes("a_camera_02") || cLower.includes("a_camera_2") || cLower === "camera_02" || cLower === "camera_2" || cLower === "c02" || cLower === "a_c02" || cLower === "a_c2") {
+    return "junction_A_camera_02";
+  }
+  if (cLower.includes("b_camera_01") || cLower.includes("b_camera_1") || cLower === "camera_03" || cLower === "camera_3" || cLower === "c03" || cLower === "b_c01" || cLower === "b_c1") {
+    return "junction_B_camera_01";
+  }
+  if (cLower.includes("b_camera_02") || cLower.includes("b_camera_2") || cLower === "camera_04" || cLower === "camera_4" || cLower === "c04" || cLower === "b_c02" || cLower === "b_c2") {
+    return "junction_B_camera_02";
+  }
+  return c;
+}
+
+export function getCanonicalCameraName(camId, fallback) {
+  const norm = normalizeCameraId(camId);
+  switch (norm) {
+    case "junction_A_camera_01":
+      return "Junction A — Camera 01 (Inbound Entry)";
+    case "junction_A_camera_02":
+      return "Junction A — Camera 02 (Outbound Exit)";
+    case "junction_B_camera_01":
+      return "Junction B — Camera 01 (Inbound Entry)";
+    case "junction_B_camera_02":
+      return "Junction B — Camera 02 (Outbound Exit)";
+    default:
+      return fallback || camId || "Surveillance Camera";
+  }
+}
+
+export function getCanonicalJunctionName(juncId, fallback) {
+  const j = String(juncId || "").toLowerCase();
+  if (j.includes("junction_a") || j.includes("junction a") || j.includes("south gate") || j.includes("sarani")) {
+    return "Junction A — South Gate Quad";
+  }
+  if (j.includes("junction_b") || j.includes("junction b") || j.includes("north gate") || j.includes("kanyapur")) {
+    return "Junction B — North Gate Quad";
+  }
+  return fallback || juncId || "Traffic Junction";
 }
 
 console.info("[API] Backend-first API client initialized. Base:", API_BASE);

@@ -13,7 +13,12 @@ import { TrafficAnalyticsPage } from "./components/TrafficAnalyticsPage";
 import { SystemValidationPage } from "./components/SystemValidationPage";
 import { EvidencePlaybackModal } from "./components/EvidencePlaybackModal";
 import { FullMapModal } from "./components/FullMapModal";
-import { api } from "./services/api";
+import {
+  api,
+  normalizeCameraId,
+  getCanonicalCameraName,
+  getCanonicalJunctionName,
+} from "./services/api";
 import "./App.css";
 
 export default function App() {
@@ -154,6 +159,23 @@ export default function App() {
 
         setSelectedVehicle(firstMatched);
 
+        // Immediately enrich with VAHAN RC & predictive interception
+        const defaultPlate = firstMatched?.plate || firstMatched?.global_vehicle_id;
+        if (defaultPlate) {
+          api.getVehicle(defaultPlate)
+            .then((fullVeh) => {
+              if (fullVeh) {
+                setSelectedVehicle((prev) =>
+                  prev?.global_vehicle_id === firstMatched?.global_vehicle_id ||
+                  prev?.plate === firstMatched?.plate
+                    ? { ...prev, ...fullVeh }
+                    : prev
+                );
+              }
+            })
+            .catch((err) => console.warn("[Dashboard] Enriched vehicle load error:", err));
+        }
+
         if (firstMatched?.trajectory && firstMatched.trajectory.length > 0) {
           const firstCamera = firstMatched.trajectory[0]?.camera_id;
           if (firstCamera) {
@@ -192,9 +214,10 @@ export default function App() {
   const handlePlayEvent = (cameraId, timestampSeconds, label, extra = {}) => {
     console.info("[Video Event Play Requested]", { cameraId, timestampSeconds, label, extra });
 
-    const camObj = cameras[cameraId] || {};
-    const camName = camObj.name || camObj.camera_name || cameraId;
-    const juncName = camObj.scene || camObj.junction_name || "Vivekananda Sarani / Kanyapur Link Rd";
+    const canonicalCamId = normalizeCameraId(cameraId);
+    const camObj = cameras[canonicalCamId] || cameras[cameraId] || {};
+    const camName = getCanonicalCameraName(canonicalCamId, camObj.name || camObj.camera_name);
+    const juncName = getCanonicalJunctionName(camObj.scene || camObj.junction_name);
 
     // Extract plate from label e.g. "WB37E1275 @ Camera 01" or extra or selectedVehicle
     let plate =
@@ -230,7 +253,7 @@ export default function App() {
       plateImage = selectedVehicle.plate_image_url;
     }
     if (!plateImage && selectedVehicle?.trajectory) {
-      const matchLoc = selectedVehicle.trajectory.find((t) => t.camera_id === cameraId);
+      const matchLoc = selectedVehicle.trajectory.find((t) => normalizeCameraId(t.camera_id) === canonicalCamId);
       if (matchLoc?.plate_image_url || matchLoc?.plate_image) {
         plateImage = matchLoc.plate_image_url || matchLoc.plate_image;
       }
@@ -252,7 +275,7 @@ export default function App() {
           );
 
     setEvidenceModalData({
-      cameraId,
+      cameraId: canonicalCamId,
       cameraName: camName,
       junctionName: juncName,
       timestamp: Number(timestampSeconds) || 0,
@@ -261,7 +284,6 @@ export default function App() {
       vehicleType: extra.vehicle_type || selectedVehicle?.vehicle_type || "car",
       confidence: extra.confidence || 0.96,
       isBlacklisted,
-      bbox: (extra.bbox && typeof extra.bbox.x === "number") ? extra.bbox : { x: 38, y: 44, width: 24, height: 26 },
       label: label || `${plate} @ ${camName}`,
     });
   };
@@ -282,9 +304,8 @@ export default function App() {
       setActiveTab("surveillance");
     }
 
-    if (cameraId) {
-      setSelectedCameraId(cameraId);
-    }
+    const canonicalCamId = normalizeCameraId(cameraId);
+    setSelectedCameraId(canonicalCamId);
 
     // Smooth scroll up to CCTV Camera Grid
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -295,7 +316,7 @@ export default function App() {
         cameraGridRef.current &&
         typeof cameraGridRef.current.seekAndPlay === "function"
       ) {
-        cameraGridRef.current.seekAndPlay(cameraId, seekTime, label, {
+        cameraGridRef.current.seekAndPlay(canonicalCamId, seekTime, label, {
           plate,
           originalTimestamp,
           bbox,
@@ -313,30 +334,62 @@ export default function App() {
       targetVehicle = { plate: vehicleOrObj };
     }
 
-    // If only { plate: "..." } passed from an alert or blacklist
-    if (!targetVehicle.trajectory && targetVehicle.plate) {
+    // Immediately set for fast responsiveness
+    setSelectedVehicle(targetVehicle);
+
+    const plateToSearch =
+      targetVehicle.plate ||
+      targetVehicle.normalized_plate ||
+      targetVehicle.plate_number ||
+      targetVehicle.global_vehicle_id;
+
+    // ALWAYS query canonical search to ensure full Inbound/Outbound details & corridor are loaded
+    if (plateToSearch) {
       try {
-        const searchResults = await api.searchVehicles(targetVehicle.plate);
-        if (searchResults && searchResults.length > 0) {
-          targetVehicle = searchResults[0];
+        const searchResults = await api.searchVehicles(plateToSearch);
+        let enriched = null;
+        if (Array.isArray(searchResults) && searchResults.length > 0) {
+          enriched = searchResults[0];
+        } else if (searchResults && Array.isArray(searchResults.results) && searchResults.results.length > 0) {
+          enriched = searchResults.results[0];
+        } else if (searchResults && searchResults.plate) {
+          enriched = searchResults;
+        }
+
+        if (enriched) {
+          if (Array.isArray(enriched.trajectory)) {
+            enriched.trajectory = enriched.trajectory.map((item) => ({
+              ...item,
+              camera_name: getCanonicalCameraName(item.camera_id, item.camera_name),
+              junction_name: getCanonicalJunctionName(item.junction_name || item.junction),
+            }));
+          }
+          setSelectedVehicle(enriched);
+          targetVehicle = enriched;
         }
       } catch (err) {
-        console.warn("Failed to resolve journey for alert target:", err);
+        console.warn("Failed to resolve journey for target:", err);
       }
     }
 
-    setSelectedVehicle(targetVehicle);
+    if (Array.isArray(targetVehicle.trajectory)) {
+      targetVehicle.trajectory = targetVehicle.trajectory.map((item) => ({
+        ...item,
+        camera_name: getCanonicalCameraName(item.camera_id, item.camera_name),
+        junction_name: getCanonicalJunctionName(item.junction_name || item.junction),
+      }));
+    }
 
     if (Array.isArray(targetVehicle.trajectory) && targetVehicle.trajectory.length > 0) {
       const firstObservation = targetVehicle.trajectory[0];
       if (firstObservation?.camera_id) {
-        setSelectedCameraId(firstObservation.camera_id);
+        setSelectedCameraId(normalizeCameraId(firstObservation.camera_id));
       }
     } else if (
       Array.isArray(targetVehicle.camera_ids) &&
       targetVehicle.camera_ids.length > 0
     ) {
-      setSelectedCameraId(targetVehicle.camera_ids[0]);
+      setSelectedCameraId(normalizeCameraId(targetVehicle.camera_ids[0]));
     }
   };
 
@@ -372,15 +425,62 @@ export default function App() {
   };
 
   /* OPEN VEHICLE DOSSIER */
-  const handleOpenDossier = (vehicle) => {
+  const handleOpenDossier = async (vehicle) => {
     if (!vehicle) return;
-    setSelectedVehicle(vehicle);
+
+    let targetVehicle = { ...vehicle };
+
+    if (Array.isArray(targetVehicle.trajectory)) {
+      targetVehicle.trajectory = targetVehicle.trajectory.map((item) => ({
+        ...item,
+        camera_name: getCanonicalCameraName(item.camera_id, item.camera_name),
+        junction_name: getCanonicalJunctionName(item.junction_name || item.junction),
+      }));
+    }
+
+    setSelectedVehicle(targetVehicle);
     setIsDetailModalOpen(true);
 
-    if (Array.isArray(vehicle.trajectory) && vehicle.trajectory.length > 0) {
-      const cameraId = vehicle.trajectory[0]?.camera_id;
+    if (Array.isArray(targetVehicle.trajectory) && targetVehicle.trajectory.length > 0) {
+      const cameraId = targetVehicle.trajectory[0]?.camera_id;
       if (cameraId) {
-        setSelectedCameraId(cameraId);
+        setSelectedCameraId(normalizeCameraId(cameraId));
+      }
+    }
+
+    const plateToSearch =
+      targetVehicle.plate ||
+      targetVehicle.normalized_plate ||
+      targetVehicle.plate_number ||
+      targetVehicle.global_vehicle_id;
+
+    if (plateToSearch) {
+      try {
+        const searchResults = await api.searchVehicles(plateToSearch);
+        let enriched = null;
+        if (Array.isArray(searchResults) && searchResults.length > 0) {
+          enriched = searchResults[0];
+        } else if (searchResults && Array.isArray(searchResults.results) && searchResults.results.length > 0) {
+          enriched = searchResults.results[0];
+        } else if (searchResults && searchResults.plate) {
+          enriched = searchResults;
+        }
+
+        if (enriched) {
+          if (Array.isArray(enriched.trajectory)) {
+            enriched.trajectory = enriched.trajectory.map((item) => ({
+              ...item,
+              camera_name: getCanonicalCameraName(item.camera_id, item.camera_name),
+              junction_name: getCanonicalJunctionName(item.junction_name || item.junction),
+            }));
+          }
+          setSelectedVehicle((prev) => ({
+            ...prev,
+            ...enriched,
+          }));
+        }
+      } catch (err) {
+        console.warn("Failed to enrich vehicle for dossier modal:", err);
       }
     }
   };
@@ -495,6 +595,7 @@ export default function App() {
                 onSelectVehicle={handleSelectVehicle}
                 onPlayEvent={handlePlayEvent}
                 onFocusCamera={handleCameraSelect}
+                cameras={cameras}
               />
 
               {/* Right: Geospatial Journey Map with Dual Mode A / Mode B */}
@@ -532,6 +633,7 @@ export default function App() {
               vehicles={vehicles}
               selectedVehicleId={selectedVehicle?.global_vehicle_id}
               onSelectVehicle={handleOpenDossier}
+              onOpenDossier={handleOpenDossier}
             />
           </>
         )}
@@ -552,6 +654,7 @@ export default function App() {
       {isDetailModalOpen && selectedVehicle && (
         <VehicleDetailModal
           vehicle={selectedVehicle}
+          cameras={cameras}
           onClose={() => setIsDetailModalOpen(false)}
           onPlayEvent={handlePlayEvent}
           onFocusCamera={handleCameraSelect}

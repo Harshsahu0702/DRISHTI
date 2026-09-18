@@ -113,7 +113,7 @@ export function BlacklistManagement({
       vehicle.normalized_plate || vehicle.plate_number || vehicle.plate;
 
     // 1. Check if last_seen has camera_code and timestamp_sec
-    if (vehicle.last_seen?.camera_code && vehicle.last_seen?.timestamp_sec) {
+    if (vehicle.last_seen?.camera_code && (vehicle.last_seen?.timestamp_sec !== undefined && vehicle.last_seen?.timestamp_sec !== null)) {
       if (onPlayEvent) {
         onPlayEvent(
           vehicle.last_seen.camera_code,
@@ -131,21 +131,24 @@ export function BlacklistManagement({
 
     // 2. Fallback to searching vehicle journey to find recent sighting
     try {
-      const res = await api.searchVehicles(plate);
-      if (res && res[0]?.trajectory && res[0].trajectory.length > 0) {
-        const obs = res[0].trajectory[res[0].trajectory.length - 1];
-        if (onPlayEvent && obs.camera_id) {
+      const searchRes = await api.searchVehicles(plate);
+      const vehObj = Array.isArray(searchRes) ? searchRes[0] : (searchRes?.results?.[0] || searchRes);
+      if (vehObj?.trajectory && vehObj.trajectory.length > 0) {
+        const obs = vehObj.trajectory[vehObj.trajectory.length - 1];
+        const camId = obs.camera_id;
+        const ts = obs.timestamp_sec ?? obs.timestamp_seconds ?? obs.first_time_sec ?? 0;
+        if (onPlayEvent && camId) {
           onPlayEvent(
-            obs.camera_id,
-            obs.timestamp_sec || 0,
-            `${plate} @ ${obs.camera_name || obs.camera_id}`,
+            camId,
+            ts,
+            `${plate} @ ${obs.camera_name || camId}`,
             {
               plate,
               plate_image: obs.plate_image || obs.plate_image_url,
               isBlacklisted: true,
             }
           );
-          if (onFocusCamera) onFocusCamera(obs.camera_id);
+          if (onFocusCamera) onFocusCamera(camId);
           return;
         }
       }
@@ -367,6 +370,9 @@ export function BlacklistManagement({
                   <tr
                     key={v.id}
                     className={!v.is_active ? "row-inactive" : ""}
+                    onClick={() => onSelectVehicle && onSelectVehicle(v)}
+                    style={{ cursor: "pointer" }}
+                    title="Click to track vehicle on Map and CCTV Timeline"
                   >
                     {/* Plate */}
                     <td>
@@ -466,7 +472,10 @@ export function BlacklistManagement({
                         <button
                           type="button"
                           className="btn-action btn-view"
-                          onClick={() => openViewDetails(v)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openViewDetails(v);
+                          }}
                           title="View blacklist dossier & detection history"
                         >
                           <Eye size={12} style={{ display: "inline", marginRight: "3px" }} />
@@ -475,7 +484,10 @@ export function BlacklistManagement({
                         <button
                           type="button"
                           className="btn-action btn-evidence"
-                          onClick={() => handlePlayVehicleEvidence(v)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayVehicleEvidence(v);
+                          }}
                           title="Play CCTV Evidence video for this blacklisted target"
                         >
                           <Play size={11} fill="currentColor" style={{ display: "inline", marginRight: "3px" }} />
@@ -484,7 +496,10 @@ export function BlacklistManagement({
                         <button
                           type="button"
                           className="btn-action btn-edit"
-                          onClick={() => openEditModal(v)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(v);
+                          }}
                           disabled={isLoading}
                           title="Edit reason, priority, or notes"
                         >
@@ -496,7 +511,10 @@ export function BlacklistManagement({
                           className={`btn-action ${
                             v.is_active ? "btn-deactivate" : "btn-activate"
                           }`}
-                          onClick={() => handleToggleActive(v)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleActive(v);
+                          }}
                           disabled={isLoading}
                           title={
                             v.is_active
@@ -510,12 +528,13 @@ export function BlacklistManagement({
                         <button
                           type="button"
                           className="btn-action btn-delete"
-                          onClick={() =>
+                          onClick={(e) => {
+                            e.stopPropagation();
                             handleDeleteClick(
                               v.id,
                               v.normalized_plate || v.plate_number
-                            )
-                          }
+                            );
+                          }}
                           disabled={isLoading}
                           title="Permanently remove from MySQL"
                         >

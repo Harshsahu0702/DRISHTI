@@ -59,7 +59,7 @@ export function Header({
             )}
           </div>
           <div className="brand-sub-descriptor">
-            City-Wide Visual Intelligence for Vehicle Tracking & Mobility Analysis
+            City-Wide AI Vehicle Tracking & Traffic Monitoring
           </div>
         </div>
       </div>
@@ -71,21 +71,21 @@ export function Header({
             type="button"
             className={`nav-tab-btn ${activeTab === "surveillance" ? "active" : ""}`}
             onClick={() => onSelectTab("surveillance")}
-            title="CCTV Surveillance, Target Vehicle Search & Live Tracking"
+            title="Live Cameras, Vehicle Search & Tracking"
           >
             <Shield size={15} />
-            <span>Surveillance & Tracking</span>
+            <span>Live Cameras & Tracking</span>
           </button>
 
           <button
             type="button"
             className={`nav-tab-btn ${activeTab === "analytics" ? "active" : ""}`}
             onClick={() => onSelectTab("analytics")}
-            title="City-Wide Traffic Analytics, OD Flow Matrix & Congestion Diagnostics"
+            title="City-Wide Traffic Analytics & Congestion Reports"
           >
             <BarChart3 size={15} />
-            <span>Traffic Mobility Analytics</span>
-            <span className="nav-tab-badge">LIVE INTEL</span>
+            <span>Traffic Analytics</span>
+            <span className="nav-tab-badge">LIVE DATA</span>
           </button>
         </nav>
       )}

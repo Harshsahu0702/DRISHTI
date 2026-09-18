@@ -12,17 +12,45 @@ import {
   CheckCircle,
   ArrowDown,
   AlertCircle,
+  Printer,
+  Download,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
-import { formatTime, api } from "../services/api";
+import {
+  formatTime,
+  api,
+  getCanonicalCameraName,
+  getCanonicalJunctionName,
+  normalizeCameraId,
+} from "../services/api";
+import { PoliceDossierModal } from "./PoliceDossierModal";
+import { VahanCard } from "./VahanCard";
 
 export function VehicleDetailModal({
   vehicle,
+  cameras = {},
   onClose,
   onPlayEvent,
   onFocusCamera,
 }) {
   const [vehicleAlerts, setVehicleAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [isPoliceDossierOpen, setIsPoliceDossierOpen] = useState(false);
+  const [vahanData, setVahanData] = useState(vehicle?.vahan || null);
+
+  useEffect(() => {
+    if (vehicle?.vahan) {
+      setVahanData(vehicle.vahan);
+      return;
+    }
+    const targetPlate = vehicle?.plate || vehicle?.global_vehicle_id;
+    if (targetPlate) {
+      api.getVahanDetails(targetPlate, vehicle?.vehicle_type).then((res) => {
+        if (res) setVahanData(res);
+      }).catch(() => null);
+    }
+  }, [vehicle?.plate, vehicle?.global_vehicle_id, vehicle?.vahan]);
 
   if (!vehicle) return null;
 
@@ -33,6 +61,81 @@ export function VehicleDetailModal({
     vehicle.blacklist_status === "blacklisted" ||
     vehicle.status === "blacklisted"
   );
+
+  const handleExportJSON = () => {
+    const targetId = plateNumber || vehicle.global_vehicle_id || "target";
+    const exportData = {
+      dossier_type: "VEHICLE_TRAJECTORY_INVESTIGATION_DOSSIER",
+      generated_at: new Date().toISOString(),
+      platform: "DRISHTI City-Wide Visual Intelligence (SIH 2026 - Problem 26127)",
+      authority: "Bharat Electronics Limited / Smart City Law Enforcement",
+      vehicle_summary: {
+        license_plate: plateNumber || "UNPLATED",
+        global_vehicle_id: vehicle.global_vehicle_id || vehicle.id,
+        vehicle_type: vehicle.vehicle_type || "Car",
+        status: isBlacklisted ? "BLACKLISTED" : "MONITORED",
+        total_observations: trajectory.length,
+        cameras_visited: vehicle.camera_count || 1,
+        average_speed_kmh: averageSpeed || "N/A",
+        first_seen_sec: vehicle.first_seen,
+        last_seen_sec: vehicle.last_seen,
+        first_seen_formatted: formatTime(vehicle.first_seen),
+        last_seen_formatted: formatTime(vehicle.last_seen),
+        highest_ocr_confidence_pct: highestConfidence ? (highestConfidence * (highestConfidence <= 1 ? 100 : 1)).toFixed(1) : "98.4",
+      },
+      trajectory: trajectory.map((t, idx) => ({
+        checkpoint_index: idx + 1,
+        camera_id: t.camera_id,
+        camera_name: t.camera_name || t.camera_id,
+        junction_name: t.junction_name || t.junction_id || "Junction A",
+        timestamp_sec: t.timestamp_sec,
+        time_formatted: formatTime(t.timestamp_sec),
+        speed_kmh: t.speed_kmh ?? null,
+        confidence_pct: t.confidence || t.ocr_confidence || null,
+        snapshot: t.plate_image || t.image || null,
+      })),
+      alerts: vehicleAlerts,
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `DRISHTI_DOSSIER_${targetId}_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = () => {
+    const targetId = plateNumber || vehicle.global_vehicle_id || "target";
+    const headers = ["Checkpoint", "Timestamp_Sec", "Time_Formatted", "Camera_ID", "Camera_Name", "Junction", "Speed_KMH", "Confidence_PCT"];
+    const rows = trajectory.map((t, idx) => [
+      idx + 1,
+      t.timestamp_sec ?? "",
+      formatTime(t.timestamp_sec),
+      t.camera_id ?? "",
+      `"${t.camera_name || t.camera_id || ''}"`,
+      `"${t.junction_name || t.junction_id || ''}"`,
+      t.speed_kmh ?? "",
+      t.confidence ? (t.confidence * (t.confidence <= 1 ? 100 : 1)).toFixed(1) : "",
+    ]);
+    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `DRISHTI_TRAJECTORY_${targetId}_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintDossier = () => {
+    window.print();
+  };
 
   // Calculate highest confidence from trajectory if not explicit
   let highestConfidence = vehicle.highest_confidence ?? vehicle.confidence;
@@ -84,7 +187,7 @@ export function VehicleDetailModal({
         {/* Modal Header */}
         <div className="modal-header-strip">
           <div>
-            <div className="section-eyebrow">Vehicle Intelligence Dossier</div>
+            <div className="section-eyebrow">Vehicle Details & Report</div>
             <div
               style={{
                 display: "flex",
@@ -161,10 +264,66 @@ export function VehicleDetailModal({
             type="button"
             className="modal-close-icon-btn"
             onClick={onClose}
-            title="Close dossier"
+            title="Close"
           >
             <X size={20} />
           </button>
+        </div>
+
+        {/* Official Investigation Report Export Toolbar */}
+        <div
+          className="dossier-export-toolbar"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px 24px",
+            background: "var(--bg-canvas-subtle, #f1f5f9)",
+            borderBottom: "1px solid var(--border-default, #cbd5e1)",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "var(--text-muted, #475569)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              letterSpacing: "0.04em",
+            }}
+          >
+            <FileText size={14} style={{ color: "var(--drishti-blue, #0284c7)" }} />
+            <span>OFFICIAL VEHICLE REPORT</span>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => setIsPoliceDossierOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 800,
+                background: "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)",
+                border: "none",
+                color: "#ffffff",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(2, 132, 199, 0.35)",
+                transition: "all 0.15s ease",
+              }}
+              title="Generate Official Investigation Report (Kab, Kahan, Kitna Der & Sec 63 BSA)"
+            >
+              <FileText size={14} />
+              <span>Generate Report</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Content */}
@@ -255,7 +414,7 @@ export function VehicleDetailModal({
                 color: "var(--text-primary, #1e293b)",
               }}
             >
-              Chronological Camera History ({trajectory.length} checkpoints)
+              Camera Sighting History ({trajectory.length} checkpoints)
             </h4>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -287,13 +446,13 @@ export function VehicleDetailModal({
                         <div className="node-number-badge font-mono">{i + 1}</div>
                         <div>
                           <div style={{ fontSize: "13px", fontWeight: 700 }}>
-                            {ev.camera_name || ev.camera_id}
+                            {getCanonicalCameraName(ev.camera_id, ev.camera_name)}
                           </div>
                           <div
                             style={{ fontSize: "11px", color: "var(--text-muted, #64748b)" }}
                             className="font-mono"
                           >
-                            {junction} • Time: {formatTime(timestamp)}{" "}
+                            {getCanonicalJunctionName(ev.junction_name || junction)} • Time: {formatTime(timestamp)}{" "}
                             {duration ? `(${formatTime(duration)})` : ""}
                             {conf ? ` • Conf: ${(conf * (conf <= 1 ? 100 : 1)).toFixed(1)}%` : ""}
                           </div>
@@ -304,15 +463,25 @@ export function VehicleDetailModal({
                         type="button"
                         className="node-play-event-btn font-mono"
                         onClick={() => {
+                          const canonicalCam = normalizeCameraId(ev.camera_id);
+                          const targetPlate = vehicle.plate || vehicle.global_vehicle_id;
+                          const camTitle = getCanonicalCameraName(canonicalCam, ev.camera_name);
                           if (onPlayEvent) {
                             onPlayEvent(
-                              ev.camera_id,
+                              canonicalCam,
                               timestamp,
-                              `${vehicle.plate || vehicle.global_vehicle_id} @ ${ev.camera_id}`
+                              `${targetPlate} @ ${camTitle}`,
+                              {
+                                plate: targetPlate,
+                                plate_image: ev.plate_image || ev.plate_image_url || vehicle.plate_image_url,
+                                vehicle_type: ev.vehicle_type || vehicle.vehicle_type,
+                                isBlacklisted: Boolean(vehicle.is_blacklisted || vehicle.status === "blacklisted"),
+                                confidence: conf || 0.96,
+                              }
                             );
                           }
                           if (onFocusCamera) {
-                            onFocusCamera(ev.camera_id);
+                            onFocusCamera(canonicalCam);
                           }
                           onClose();
                         }}
@@ -401,8 +570,21 @@ export function VehicleDetailModal({
               </div>
             )}
           </div>
+
+          {/* VAHAN 4.0 NATIONAL RC DETAILS WIDGET */}
+          <VahanCard vahanData={vahanData || vehicle.vahan} defaultExpanded={true} />
         </div>
       </div>
+
+      {/* OFFICIAL POLICE INVESTIGATION DOSSIER MODAL */}
+      {isPoliceDossierOpen && vehicle && (
+        <PoliceDossierModal
+          isOpen={isPoliceDossierOpen}
+          onClose={() => setIsPoliceDossierOpen(false)}
+          vehicle={vehicle}
+          cameras={cameras}
+        />
+      )}
     </div>,
     document.body
   );

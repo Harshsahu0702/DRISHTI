@@ -114,7 +114,7 @@ def get_or_create_evidence_clip(
     start_sec = max(0.0, timestamp - pre_roll)
     temp_clip = EVIDENCE_CACHE_DIR / f"temp_{clip_filename}"
 
-    # Try fast stream copy first (fastest, preserves exact camera quality)
+    # Try fast stream copy first (< 50ms, preserves exact camera quality)
     cmd_copy = [
         ffmpeg_exe,
         "-y",
@@ -133,7 +133,7 @@ def get_or_create_evidence_clip(
     except Exception:
         pass
 
-    # Fallback to ultrafast transcode (guarantees exact keyframe at start)
+    # Fallback to ultrafast transcode
     cmd_transcode = [
         ffmpeg_exe,
         "-y",
@@ -142,16 +142,19 @@ def get_or_create_evidence_clip(
         "-t", str(round(duration, 2)),
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "22",
+        "-crf", "23",
         "-pix_fmt", "yuv420p",
         "-an",
         "-movflags", "+faststart",
         str(temp_clip),
     ]
-    subprocess.run(cmd_transcode, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if temp_clip.exists() and temp_clip.stat().st_size > 1024:
-        temp_clip.replace(clip_path)
-        return clip_path
+    try:
+        subprocess.run(cmd_transcode, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if temp_clip.exists() and temp_clip.stat().st_size > 1024:
+            temp_clip.replace(clip_path)
+            return clip_path
+    except Exception as e:
+        logger.error(f"Failed to transcode evidence clip: {e}")
 
     return source_path
 
@@ -174,11 +177,34 @@ def get_video_stream_response(video_path: Path, range_header: Optional[str] = No
 
 def get_plate_image_path(image_name: str) -> Optional[Path]:
     """Resolve plate crop image from static/plates or fallback."""
+    if not image_name:
+        return None
     clean_name = Path(image_name).name
+
+    # 1. Direct check in STATIC_PLATES_DIR
     p1 = STATIC_PLATES_DIR / clean_name
     if p1.exists():
         return p1
+
+    # 2. Check with .jpg extension appended if missing
+    if not clean_name.lower().endswith((".jpg", ".jpeg", ".png")):
+        p1_ext = STATIC_PLATES_DIR / f"{clean_name}.jpg"
+        if p1_ext.exists():
+            return p1_ext
+
+    # 3. Check in LEGACY_PLATES_DIR
     p2 = LEGACY_PLATES_DIR / clean_name
     if p2.exists():
         return p2
+
+    # 4. Check evaluation/crops
+    eval_p = PROJECT_ROOT / "evaluation" / "crops" / clean_name
+    if eval_p.exists():
+        return eval_p
+
+    # 5. Fuzzy match against all files in STATIC_PLATES_DIR
+    for f in STATIC_PLATES_DIR.glob("*.jpg"):
+        if clean_name in f.name or f.stem in clean_name:
+            return f
+
     return None

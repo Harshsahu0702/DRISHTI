@@ -114,7 +114,7 @@ export function AlertCenter({
             onClick={() => setFilterType("congestion")}
           >
             <Flame size={13} style={{ display: "inline", marginRight: "4px" }} />
-            Bottleneck Advisories ({alertsData?.congestion_count || 0})
+            Traffic Jam Warnings ({alertsData?.congestion_count || 0})
           </button>
         </div>
       </div>
@@ -128,7 +128,7 @@ export function AlertCenter({
               No Active Alerts in this Category
             </div>
             <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: "12px" }}>
-              The surveillance perimeter is normal. No blacklisted plates or kinematic anomalies detected.
+              All cameras normal. No blacklisted vehicles or route issues detected.
             </p>
           </div>
         ) : (
@@ -156,9 +156,9 @@ export function AlertCenter({
                 <div className="alert-info-col">
                   <div className="alert-title-row">
                     <span className="alert-category-label">
-                      {isBlacklist && "BLACKLISTED TARGET INTERCEPT"}
-                      {isAnomaly && "KINEMATIC ROUTE ANOMALY"}
-                      {isCongestion && "TRAFFIC BOTTLENECK ADVISORY"}
+                      {isBlacklist && "BLACKLISTED VEHICLE DETECTED"}
+                      {isAnomaly && "UNUSUAL ROUTE DETECTED"}
+                      {isCongestion && "TRAFFIC JAM WARNING"}
                     </span>
 
                     {alert.plate && (
@@ -212,8 +212,16 @@ export function AlertCenter({
                       className="alert-action-btn is-camera-btn font-mono"
                       onClick={() => {
                         onFocusCamera(alert.camera_id);
-                        if (onPlayEvent && alert.timestamp_sec) {
-                          onPlayEvent(alert.camera_id, alert.timestamp_sec, `Alert: ${alert.plate || alert.camera_id}`);
+                        if (onPlayEvent && (alert.timestamp_sec !== undefined && alert.timestamp_sec !== null)) {
+                          onPlayEvent(
+                            alert.camera_id,
+                            alert.timestamp_sec,
+                            `Alert: ${alert.plate || alert.camera_id}`,
+                            {
+                              plate: alert.plate,
+                              isBlacklisted: true,
+                            }
+                          );
                         }
                       }}
                       title="Jump to camera CCTV feed"

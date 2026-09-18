@@ -231,7 +231,7 @@ export function AnalyticsSection({ analytics, selectedVehicle }) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <AlertOctagon size={16} style={{ color: "var(--status-error)" }} />
             <span>
-              <strong>BOTTLENECK DETECTED:</strong> {bottlenecks[0].junction_name} ({bottlenecks[0].camera_name}) — Congestion Index: {bottlenecks[0].congestion_index} ({bottlenecks[0].congestion_level})
+              <strong>TRAFFIC JAM DETECTED:</strong> {bottlenecks[0].junction_name} ({bottlenecks[0].camera_name}) — Congestion Level: {bottlenecks[0].congestion_level || "High"}
             </span>
           </div>
           <div style={{ fontSize: "11px", color: "var(--text-secondary)" }}>

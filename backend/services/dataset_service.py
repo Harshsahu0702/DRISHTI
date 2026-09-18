@@ -16,13 +16,29 @@ DETECTIONS_FILE = PROJECT_ROOT / "dataset" / "metadata" / "detections.json"
 PLATES_DIR = PROJECT_ROOT / "static" / "plates"
 STATIC_PLATES_DIR = PLATES_DIR
 
+def normalize_camera_id(camera_id: Optional[str]) -> str:
+    """Normalize any camera reference (case, hyphens, short names) to canonical key."""
+    if not camera_id:
+        return "junction_A_camera_01"
+    cid = str(camera_id).strip()
+    c_lower = cid.lower().replace("-", "_").replace(" ", "_")
+    if "a_camera_01" in c_lower or c_lower in ("junction_a_camera_01", "junction_a_camera_1", "camera_01", "camera_1", "c01", "a_c01", "a_c1"):
+        return "junction_A_camera_01"
+    if "a_camera_02" in c_lower or c_lower in ("junction_a_camera_02", "junction_a_camera_2", "camera_02", "camera_2", "c02", "a_c02", "a_c2"):
+        return "junction_A_camera_02"
+    if "b_camera_01" in c_lower or c_lower in ("junction_b_camera_01", "junction_b_camera_1", "camera_03", "camera_3", "c03", "b_c01", "b_c1"):
+        return "junction_B_camera_01"
+    if "b_camera_02" in c_lower or c_lower in ("junction_b_camera_02", "junction_b_camera_2", "camera_04", "camera_4", "c04", "b_c02", "b_c2"):
+        return "junction_B_camera_02"
+    return cid
+
 # Intentional Coordinates Fallback (Dhanbad/Asansol/Kulti corridor)
 DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_A_camera_01",
         "junction_id": "junction_A",
-        "junction_name": "Vivekananda Sarani",
-        "camera_name": "Camera 01",
+        "junction_name": "Junction A — South Gate Quad",
+        "camera_name": "Junction A — Camera 01 (Inbound Entry)",
         "video_path": "dataset/junction_A/camera_01.mp4",
         "lat": 23.710299,
         "lng": 86.952779,
@@ -30,8 +46,8 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_A_camera_02",
         "junction_id": "junction_A",
-        "junction_name": "Vivekananda Sarani",
-        "camera_name": "Camera 02",
+        "junction_name": "Junction A — South Gate Quad",
+        "camera_name": "Junction A — Camera 02 (Outbound Exit)",
         "video_path": "dataset/junction_A/camera_02.mp4",
         "lat": 23.710293,
         "lng": 86.952695,
@@ -39,8 +55,8 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_B_camera_01",
         "junction_id": "junction_B",
-        "junction_name": "Kanyapur Link Road",
-        "camera_name": "Camera 01",
+        "junction_name": "Junction B — North Gate Quad",
+        "camera_name": "Junction B — Camera 01 (Inbound Entry)",
         "video_path": "dataset/junction_B/camera_01.mp4",
         "lat": 23.713932,
         "lng": 86.952211,
@@ -48,8 +64,8 @@ DEFAULT_CAMERAS = [
     {
         "camera_id": "junction_B_camera_02",
         "junction_id": "junction_B",
-        "junction_name": "Kanyapur Link Road",
-        "camera_name": "Camera 02",
+        "junction_name": "Junction B — North Gate Quad",
+        "camera_name": "Junction B — Camera 02 (Outbound Exit)",
         "video_path": "dataset/junction_B/camera_02.mp4",
         "lat": 23.713929,
         "lng": 86.952144,
@@ -119,8 +135,12 @@ def get_cameras_list() -> List[Dict[str, Any]]:
 
 
 def get_camera_info(camera_id: str) -> Optional[Dict[str, Any]]:
-    """Get single camera info by camera_id."""
-    return get_cameras_dict().get(camera_id)
+    """Get single camera info by camera_id with robust normalization."""
+    d = get_cameras_dict()
+    if not camera_id:
+        return next(iter(d.values())) if d else None
+    norm_id = normalize_camera_id(camera_id)
+    return d.get(norm_id) or d.get(camera_id)
 
 
 def reload_detections():
