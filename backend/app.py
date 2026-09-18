@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, HTTPException, Request, Query, Body, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from backend.services.dataset_service import (
     get_cameras_dict,
@@ -315,22 +315,23 @@ def stream_camera_video(
             range_header = request.headers.get("range")
             return get_video_stream_response(grid_path, range_header)
 
+    # 1. If local file exists, serve it with full range streaming
     raw_path = info.get("video_path")
-    if not raw_path:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No video path configured for {camera_id}",
-        )
+    if raw_path:
+        video_path = PROJECT_ROOT / raw_path
+        if video_path.exists():
+            range_header = request.headers.get("range")
+            return get_video_stream_response(video_path, range_header)
 
-    video_path = PROJECT_ROOT / raw_path
-    if not video_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Video file not found for {camera_id}: {video_path}",
-        )
+    # 2. If remote cloud video URL configured (e.g. GitHub Releases / CDN / S3), redirect directly
+    remote_url = info.get("remote_video_url")
+    if remote_url:
+        return RedirectResponse(url=remote_url, status_code=307)
 
-    range_header = request.headers.get("range")
-    return get_video_stream_response(video_path, range_header)
+    raise HTTPException(
+        status_code=404,
+        detail=f"Video feed for '{camera_id}' is neither available locally nor configured with remote_video_url.",
+    )
 
 
 @app.get("/api/cameras/{camera_id}/evidence")
@@ -354,25 +355,26 @@ def get_camera_evidence_clip(
     canonical_id = info.get("camera_id", camera_id)
 
     raw_path = info.get("video_path")
-    if not raw_path:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No video path configured for {camera_id}",
+    video_path = (PROJECT_ROOT / raw_path) if raw_path else None
+    if video_path and video_path.exists():
+        clip_path = get_or_create_evidence_clip(
+            camera_id=canonical_id,
+            source_path=video_path,
+            timestamp=timestamp,
+            pre_roll=pre_roll,
+            duration=duration,
         )
+        range_header = request.headers.get("range")
+        return get_video_stream_response(clip_path, range_header)
 
-    video_path = PROJECT_ROOT / raw_path
-    if not video_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Video file not found for {camera_id}: {video_path}",
-        )
+    # Fallback to remote cloud stream if local video file absent on cloud server
+    remote_url = info.get("remote_video_url")
+    if remote_url:
+        return RedirectResponse(url=remote_url, status_code=307)
 
-    clip_path = get_or_create_evidence_clip(
-        camera_id=canonical_id,
-        source_path=video_path,
-        timestamp=timestamp,
-        pre_roll=pre_roll,
-        duration=duration,
+    raise HTTPException(
+        status_code=404,
+        detail=f"Evidence source video for '{camera_id}' not found on server.",
     )
 
     range_header = request.headers.get("range")

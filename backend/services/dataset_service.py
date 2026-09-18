@@ -110,6 +110,7 @@ def get_cameras_dict() -> Dict[str, Dict[str, Any]]:
     for cam in raw_list:
         cam_id = cam["camera_id"]
         vpath = PROJECT_ROOT / cam.get("video_path", "")
+        remote_url = cam.get("remote_video_url") or os.getenv(f"REMOTE_VIDEO_{cam_id.upper()}", "")
         item = {
             "id": cam_id,
             "camera_id": cam_id,
@@ -119,8 +120,9 @@ def get_cameras_dict() -> Dict[str, Dict[str, Any]]:
             "junction_name": cam.get("junction_name", "Junction A"),
             "scene": cam.get("junction_name", "Junction A"),
             "video_path": cam.get("video_path", ""),
+            "remote_video_url": remote_url or None,
             "video_url": f"/api/cameras/{cam_id}/video",
-            "video_exists": vpath.exists() and vpath.stat().st_size > 0,
+            "video_exists": (vpath.exists() and vpath.stat().st_size > 0) or bool(remote_url),
             "lat": cam.get("lat", 23.710299),
             "lng": cam.get("lng", 86.952779),
         }
