@@ -137,7 +137,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
           <h1 className="tap-main-title">City-Wide Traffic Mobility & Flow Intelligence</h1>
           <p className="tap-description">
             Empirical traffic flow diagnostics, Origin-Destination (OD) transition matrices,
-            real Haversine corridor transit speeds, and relative congestion indexes across Vivekananda Sarani and Kanyapur Link Road.
+            real Haversine corridor transit speeds, and relative congestion indexes across Junction A — South Gate Quad and Junction B — North Gate Quad.
           </p>
 
           <div className="tap-quick-actions">
@@ -206,7 +206,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
             <div className="tap-explainer-item">
               <strong>1. Inter-Camera Velocity:</strong>
               <code>Speed = (Haversine_Distance_Meters / Δt_seconds) × 3.6 km/h</code>
-              <p>Calculated purely when vehicle physically crosses from Vivekananda Sarani (23.710299, 86.952779) to Kanyapur Link Road (23.713932, 86.952211) separated by ~408.4 meters.</p>
+              <p>Calculated purely when vehicle physically crosses from Junction A — South Gate Quad (23.710299, 86.952779) to Junction B — North Gate Quad (23.713932, 86.952211) separated by ~408.4 meters.</p>
             </div>
             <div className="tap-explainer-item">
               <strong>2. Relative Congestion Index (RCI):</strong>
@@ -351,7 +351,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px" }}>
           {(signalRecs?.recommendations || [
             {
-              junction_name: "Vivekananda Sarani (Junction A)",
+              junction_name: "Junction A — South Gate Quad",
               current_green_time_sec: 45,
               recommended_green_time_sec: 55,
               delta_seconds: +10,
@@ -360,7 +360,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
               action: "Extending green phase by +10s to clear queue buildup.",
             },
             {
-              junction_name: "Kanyapur Link Road (Junction B)",
+              junction_name: "Junction B — North Gate Quad",
               current_green_time_sec: 45,
               recommended_green_time_sec: 45,
               delta_seconds: 0,
@@ -528,7 +528,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
             <div className="tap-speed-spectrum-head font-mono">
               <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <Gauge size={15} style={{ color: "var(--drishti-amber)" }} />
-                <strong>CORRIDOR SPEED SPECTRUM (Vivekananda Sarani ↔ Kanyapur Link Road)</strong>
+                <strong>CORRIDOR SPEED SPECTRUM (Junction A — South Gate ↔ Junction B — North Gate)</strong>
               </span>
               <span className="tap-badge-green font-mono">{speedStats.valid_sample_count || 1} Valid Samples</span>
             </div>
@@ -588,8 +588,8 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
                 className="tap-filter-select font-mono"
               >
                 <option value="all">All Junctions</option>
-                <option value="junction_a">Vivekananda Sarani</option>
-                <option value="junction_b">Kanyapur Link Road</option>
+                <option value="junction_a">Junction A — South Gate Quad</option>
+                <option value="junction_b">Junction B — North Gate Quad</option>
               </select>
             </div>
 
@@ -742,7 +742,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
               <CheckCircle2 size={18} />
             </div>
             <div className="tap-recom-content">
-              <h4>Corridor Inflow Balance (Vivekananda Sarani ➜ Kanyapur Link Road)</h4>
+              <h4>Corridor Inflow Balance (Junction A — South Gate ➜ Junction B — North Gate)</h4>
               <p>
                 Average transit duration of 11.1s across 408m indicates uninterrupted arterial flow. Signal timing is well-coordinated between South Gate and North Gate.
               </p>

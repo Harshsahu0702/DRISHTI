@@ -14,8 +14,17 @@ import {
   Radio,
   Clock,
   Video,
+  Link,
+  RotateCcw,
+  Check,
+  X,
 } from "lucide-react";
-import { api, formatTimestampSec } from "../services/api";
+import {
+  api,
+  formatTimestampSec,
+  getCanonicalCameraName,
+  getCanonicalJunctionName,
+} from "../services/api";
 
 export const CameraGrid = forwardRef(function CameraGrid(
   { cameras, onCameraSelect, selectedCameraId, isBackgroundPaused = false },
@@ -29,6 +38,47 @@ export const CameraGrid = forwardRef(function CameraGrid(
   const [mutedStates, setMutedStates] = useState({});
   const [currentTimes, setCurrentTimes] = useState({});
   const [activeEventHighlight, setActiveEventHighlight] = useState(null);
+
+  // Judge / Live Custom Stream Link State
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [customStreamUrls, setCustomStreamUrls] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("drishti_custom_camera_streams") || "{}");
+    } catch (_) {
+      return {};
+    }
+  });
+  const [targetCamForStream, setTargetCamForStream] = useState("junction_A_camera_01");
+  const [streamInputUrl, setStreamInputUrl] = useState("");
+  const [streamSuccessMsg, setStreamSuccessMsg] = useState("");
+
+  const handleApplyCustomStream = (e) => {
+    e.preventDefault();
+    if (!streamInputUrl.trim()) return;
+    const updated = {
+      ...customStreamUrls,
+      [targetCamForStream]: streamInputUrl.trim(),
+    };
+    setCustomStreamUrls(updated);
+    try {
+      localStorage.setItem("drishti_custom_camera_streams", JSON.stringify(updated));
+    } catch (_) {}
+    setStreamSuccessMsg(`Custom stream connected to ${getCanonicalCameraName(targetCamForStream)}!`);
+    setTimeout(() => {
+      setStreamSuccessMsg("");
+      setShowStreamModal(false);
+      setStreamInputUrl("");
+    }, 1200);
+  };
+
+  const handleResetStream = (camId) => {
+    const updated = { ...customStreamUrls };
+    delete updated[camId];
+    setCustomStreamUrls(updated);
+    try {
+      localStorage.setItem("drishti_custom_camera_streams", JSON.stringify(updated));
+    } catch (_) {}
+  };
 
   // Pause all background CCTV videos when evidence modal opens; resume when it closes
   useEffect(() => {
@@ -61,9 +111,9 @@ export const CameraGrid = forwardRef(function CameraGrid(
 
   const cameraList = Object.values(cameras || {});
 
-  // Group cameras by junction/scene
+  // Group cameras by canonical junction metadata
   const groupedJunctions = cameraList.reduce((groups, cam) => {
-    const scene = cam.scene || cam.junction_name || "Junction";
+    const scene = getCanonicalJunctionName(cam.scene || cam.junction_name || cam.junction_id);
     if (!groups[scene]) {
       groups[scene] = [];
     }
@@ -263,13 +313,37 @@ export const CameraGrid = forwardRef(function CameraGrid(
   return (
     <section className="camera-network-section">
       {/* Section Header */}
-      <div className="section-header-block">
+      <div className="section-header-block" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <div className="section-eyebrow">Synchronized CCTV Feeds</div>
           <h2 className="section-main-heading">Live Camera Surveillance Network</h2>
           <p className="section-subtext">
-            Continuous optical surveillance across Junction A & Junction B demonstration corridors.
+            Continuous optical surveillance across Junction A (South Gate) & Junction B (North Gate) demonstration corridors.
           </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            className="btn-configure-stream font-mono"
+            onClick={() => setShowStreamModal(true)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 14px",
+              borderRadius: "6px",
+              background: "rgba(2, 132, 199, 0.15)",
+              border: "1px solid rgba(56, 189, 248, 0.35)",
+              color: "#38bdf8",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <Link size={13} />
+            <span>CONNECT LIVE STREAM / URL</span>
+          </button>
         </div>
       </div>
 
@@ -312,7 +386,8 @@ export const CameraGrid = forwardRef(function CameraGrid(
                     ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
                     : 0;
 
-                const videoUrl = api.getCameraVideoUrl(cam.id, "grid");
+                const videoUrl = customStreamUrls[cam.id] || api.getCameraVideoUrl(cam.id, "grid");
+                const canonicalTitle = getCanonicalCameraName(cam.id, cam.name || cam.camera_name);
 
                 return (
                   <div
@@ -326,12 +401,55 @@ export const CameraGrid = forwardRef(function CameraGrid(
                     {/* Unit Header */}
                     <div className="camera-unit-header">
                       <div className="camera-name-code">
-                        <span className="cam-badge-tag">{cam.name || cam.camera_name || cam.id}</span>
+                        <span className="cam-badge-tag">{canonicalTitle}</span>
                         <span className="cam-road-sub">• {scene}</span>
                       </div>
-                      <span className="cam-fps-badge font-mono">
-                        {cam.fps || 10} FPS
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {customStreamUrls[cam.id] && (
+                          <span
+                            className="font-mono"
+                            style={{
+                              fontSize: "9px",
+                              fontWeight: 800,
+                              background: "rgba(245, 158, 11, 0.2)",
+                              color: "#f59e0b",
+                              border: "1px solid rgba(245, 158, 11, 0.4)",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                            }}
+                            title="Custom stream feed active"
+                          >
+                            CUSTOM
+                          </span>
+                        )}
+                        <span
+                          className="font-mono"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "10px",
+                            fontWeight: 800,
+                            letterSpacing: "0.05em",
+                            padding: "2px 7px",
+                            borderRadius: "4px",
+                            background: "rgba(16, 185, 129, 0.15)",
+                            border: "1px solid rgba(16, 185, 129, 0.35)",
+                            color: "#34d399",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: "#10b981",
+                              boxShadow: "0 0 6px #10b981",
+                            }}
+                          />
+                          LIVE
+                        </span>
+                      </div>
                     </div>
 
                     {/* Video Viewport */}
@@ -484,6 +602,132 @@ export const CameraGrid = forwardRef(function CameraGrid(
           </div>
         ))}
       </div>
+
+      {/* CUSTOM STREAM / JUDGE FEED MODAL */}
+      {showStreamModal && (
+        <div
+          className="evidence-modal-backdrop"
+          style={{ zIndex: 9999 }}
+          onClick={() => setShowStreamModal(false)}
+        >
+          <div
+            className="evidence-playback-modal-box font-mono"
+            style={{ maxWidth: "580px", background: "#0B1120", border: "1.5px solid #0284C7", borderRadius: "10px", padding: "24px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Link size={18} style={{ color: "#38BDF8" }} />
+                <h3 style={{ margin: 0, fontSize: "15px", color: "#F8FAFC", fontWeight: 700 }}>
+                  CONNECT CUSTOM CCTV / RTSP FEED
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStreamModal(false)}
+                style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: "18px" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: "12px", color: "#94A3B8", lineHeight: 1.5, marginBottom: "16px" }}>
+              Judges / Evaluators can attach any live web stream URL, direct MP4 file, or HTTP RTSP relay feed to any of the 4 CCTV channels.
+            </p>
+
+            <form onSubmit={handleApplyCustomStream}>
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#38BDF8", marginBottom: "6px" }}>
+                  SELECT TARGET SURVEILLANCE CAMERA:
+                </label>
+                <select
+                  value={targetCamForStream}
+                  onChange={(e) => setTargetCamForStream(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "#1E293B",
+                    border: "1px solid #334155",
+                    color: "#F8FAFC",
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <option value="junction_A_camera_01">Junction A — Camera 01 (Inbound Entry)</option>
+                  <option value="junction_A_camera_02">Junction A — Camera 02 (Outbound Exit)</option>
+                  <option value="junction_B_camera_01">Junction B — Camera 01 (Inbound Entry)</option>
+                  <option value="junction_B_camera_02">Junction B — Camera 02 (Outbound Exit)</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#38BDF8", marginBottom: "6px" }}>
+                  ENTER VIDEO / STREAM URL (.mp4, .m3u8, web stream):
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/cctv_live_feed.mp4"
+                  value={streamInputUrl}
+                  onChange={(e) => setStreamInputUrl(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "#1E293B",
+                    border: "1px solid #334155",
+                    color: "#F8FAFC",
+                    padding: "9px 12px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                  }}
+                  required
+                />
+              </div>
+
+              {streamSuccessMsg && (
+                <div style={{ padding: "8px 12px", background: "rgba(16, 185, 129, 0.2)", border: "1px solid #10B981", borderRadius: "5px", color: "#34D399", fontSize: "11px", marginBottom: "14px" }}>
+                  ✓ {streamSuccessMsg}
+                </div>
+              )}
+
+              {/* Active overrides list */}
+              {Object.keys(customStreamUrls).length > 0 && (
+                <div style={{ marginBottom: "16px", padding: "10px", background: "#1E293B", borderRadius: "6px", border: "1px solid #334155" }}>
+                  <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#F59E0B", marginBottom: "6px" }}>
+                    CURRENT ACTIVE CUSTOM OVERRIDES:
+                  </div>
+                  {Object.entries(customStreamUrls).map(([cid, url]) => (
+                    <div key={cid} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#CBD5E1", marginBottom: "4px" }}>
+                      <span>{getCanonicalCameraName(cid)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleResetStream(cid)}
+                        style={{ background: "rgba(239, 68, 68, 0.2)", border: "1px solid #EF4444", color: "#FCA5A5", padding: "2px 6px", borderRadius: "3px", fontSize: "10px", cursor: "pointer" }}
+                      >
+                        Reset to Default
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowStreamModal(false)}
+                  style={{ padding: "8px 16px", borderRadius: "6px", background: "#334155", border: "none", color: "#F8FAFC", fontSize: "12px", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: "8px 18px", borderRadius: "6px", background: "#0284C7", border: "none", color: "#FFFFFF", fontWeight: 700, fontSize: "12px", cursor: "pointer" }}
+                >
+                  Apply Live Feed
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 });

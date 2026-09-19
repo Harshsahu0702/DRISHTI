@@ -332,27 +332,6 @@ export function PoliceDossierModal({
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button
               type="button"
-              onClick={handleFetchCertificate}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "6px 14px",
-                borderRadius: "5px",
-                background: "#4338CA",
-                color: "#FFFFFF",
-                border: "none",
-                fontWeight: 700,
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-            >
-              <ShieldAlert size={14} style={{ color: "#FCD34D" }} />
-              {loadingCert ? "Verifying..." : "Section 65B Certificate"}
-            </button>
-
-            <button
-              type="button"
               onClick={handlePrint}
               style={{
                 display: "inline-flex",
@@ -449,50 +428,6 @@ export function PoliceDossierModal({
               <div style={{ fontSize: "10px", color: "#64748B" }}>{generationTime}</div>
             </div>
           </div>
-
-          {/* SECTION 65B JUDICIAL CERTIFICATE BADGE / BANNER */}
-          {showCertView && certData && (
-            <div
-              style={{
-                marginBottom: "16px",
-                padding: "14px 18px",
-                background: "#EEF2FF",
-                border: "1.5px solid #6366F1",
-                borderRadius: "8px",
-                color: "#1E1B4B",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ShieldAlert size={18} style={{ color: "#4F46E5" }} />
-                  <span style={{ fontWeight: 800, fontSize: "13px", letterSpacing: "0.02em" }}>
-                    SECTION 65B INDIAN EVIDENCE ACT CERTIFICATE OF AUTHENTICITY
-                  </span>
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    background: "#4F46E5",
-                    color: "#FFFFFF",
-                    padding: "3px 8px",
-                    borderRadius: "4px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {certData.status}
-                </span>
-              </div>
-              <p style={{ fontSize: "11.5px", margin: "0 0 6px 0", color: "#312E81", fontStyle: "italic" }}>
-                "{certData.legal_declaration}"
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "11px", fontFamily: "monospace", background: "#FFFFFF", padding: "8px 12px", borderRadius: "5px", border: "1px solid #C7D2FE" }}>
-                <div><strong>CERT ID:</strong> {certData.certificate_id}</div>
-                <div><strong>SHA-256 SEAL:</strong> <span style={{ color: "#059669" }}>{certData.digital_seal}</span></div>
-                <div><strong>CERTIFYING OFFICER:</strong> {certData.certifying_officer?.name} ({certData.certifying_officer?.badge_number})</div>
-              </div>
-            </div>
-          )}
 
           {/* 2. TARGET VEHICLE SUMMARY */}
           <div
@@ -1041,47 +976,27 @@ export function PoliceDossierModal({
             </table>
           </div>
 
-          {/* 6. STATUTORY COMPLIANCE NOTE */}
+          {/* 6. SYSTEM AUDIT FOOTER */}
           <div
             style={{
               border: "1px solid #E2E8F0",
               background: "#F8FAFC",
-              borderRadius: "5px",
-              padding: "8px 12px",
-              fontSize: "10px",
-              color: "#64748B",
-              marginBottom: "20px",
-            }}
-          >
-            <strong>Statutory Declaration:</strong> Certified under Section 63 of Bharatiya Sakshya Adhiniyam, 2023 / Section 65B Indian Evidence Act. Generated autonomously by the DRISHTI City-Wide AI Surveillance System.
-          </div>
-
-          {/* 7. SIGNATURE BLOCK */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "40px",
-              textAlign: "center",
+              borderRadius: "6px",
+              padding: "10px 14px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
               fontSize: "11px",
-              marginTop: "20px",
-              paddingTop: "12px",
+              color: "#64748B",
+              marginTop: "16px",
+              marginBottom: "10px",
             }}
           >
             <div>
-              <div style={{ height: "30px" }}></div>
-              <div style={{ borderTop: "1px solid #0F172A", paddingTop: "4px", fontWeight: 700 }}>
-                Investigating Officer / Analyst
-              </div>
-              <div style={{ fontSize: "9.5px", color: "#64748B" }}>Traffic Intelligence Center</div>
+              <strong>DRISHTI Traffic Intelligence & Surveillance:</strong> Automated vehicular audit record generated by AI Vision & OCR Engine.
             </div>
-
-            <div>
-              <div style={{ height: "30px" }}></div>
-              <div style={{ borderTop: "1px solid #0F172A", paddingTop: "4px", fontWeight: 700 }}>
-                Authorizing Officer / Supervisor
-              </div>
-              <div style={{ fontSize: "9.5px", color: "#64748B" }}>Official Stamp / Seal</div>
+            <div className="font-mono" style={{ color: "#0284C7", fontWeight: 700 }}>
+              VERIFIED RECORD • REF: {reportId}
             </div>
           </div>
         </div>

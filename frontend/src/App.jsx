@@ -719,7 +719,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span>NETWORK: 4 CCTV NODES</span>
           <span>•</span>
-          <span>SYNC: 10.0 FPS</span>
+          <span style={{ color: "var(--status-success)" }}>ALL CHANNELS SYNCHRONIZED</span>
         </div>
       </footer>
     </div>

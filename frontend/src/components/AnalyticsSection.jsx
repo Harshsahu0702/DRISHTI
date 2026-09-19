@@ -27,7 +27,7 @@ export function AnalyticsSection({ analytics, selectedVehicle }) {
           <div className="section-eyebrow">Macro Intelligence & Sensor Telemetry</div>
           <h2 className="section-main-heading">City-Wide Traffic Analytics & OD Matrix</h2>
           <p className="section-subtext">
-            Sensor telemetry derived directly from synchronized detection logs across Vivekananda Sarani and Kanyapur Link Road.
+            Sensor telemetry derived directly from synchronized detection logs across Junction A (South Gate) and Junction B (North Gate).
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "var(--text-muted)" }}>
@@ -97,7 +97,7 @@ export function AnalyticsSection({ analytics, selectedVehicle }) {
               <span className="speed-unit font-mono">km/h</span>
             </div>
             <div className="speed-sub-label">
-              Corridor Average Speed (Vivekananda Sarani ↔ Kanyapur Link Road)
+              Corridor Average Speed (Junction A — South Gate ↔ Junction B — North Gate)
             </div>
 
             <div className="speed-stats-grid font-mono">
