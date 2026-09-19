@@ -235,10 +235,10 @@ class AnalyticsEngine:
 
             od_matrix_list.append({
                 "origin_camera_id": c_orig,
-                "origin_name": f"{orig_cam.get('junction_name', '')} - {orig_cam.get('camera_name', c_orig)}",
+                "origin_name": orig_cam.get('camera_name', c_orig),
                 "origin_junction": orig_cam.get("junction_id", ""),
                 "destination_camera_id": c_dest,
-                "destination_name": f"{dest_cam.get('junction_name', '')} - {dest_cam.get('camera_name', c_dest)}",
+                "destination_name": dest_cam.get('camera_name', c_dest),
                 "destination_junction": dest_cam.get("junction_id", ""),
                 "transition_label": f"{orig_cam.get('camera_name', c_orig)} → {dest_cam.get('camera_name', c_dest)}",
                 "corridor_label": f"{orig_cam.get('junction_name', '')} → {dest_cam.get('junction_name', '')}",

@@ -4942,6 +4942,8 @@ body {
   border-radius: var(--radius-xl);
   padding: 24px 28px;
   box-shadow: 0 4px 20px -2px rgba(45, 30, 15, 0.05);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .tap-panel-title-row {
@@ -4950,6 +4952,7 @@ body {
   align-items: flex-start;
   margin-bottom: 20px;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .tap-panel-h2 {
@@ -5280,17 +5283,23 @@ body {
 /* Corridor Flow Cards Row */
 .tap-corridor-cards-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   margin-bottom: 22px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tap-corridor-flow-card {
   background: #FBF8F4;
   border: 1.5px solid rgba(180, 135, 90, 0.25);
   border-radius: var(--radius-lg);
-  padding: 18px 22px;
+  padding: 16px 18px;
   transition: all 0.2s ease;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tap-corridor-flow-card:hover {
@@ -5303,7 +5312,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .tap-cf-badge {
@@ -5325,17 +5334,48 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  gap: 12px;
+  margin-bottom: 14px;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .tap-cf-node {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   background: #FFFFFF;
   border: 1px solid rgba(180, 135, 90, 0.2);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 10px 12px;
   position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.tap-cf-node-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.tap-node-role {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.tap-node-junc-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--text-secondary);
+  margin-left: auto;
 }
 
 .tap-node-dot {
@@ -5343,7 +5383,7 @@ body {
   height: 8px;
   border-radius: 50%;
   display: inline-block;
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
 .tap-node-dot.origin {
@@ -5363,11 +5403,16 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .tap-node-sub {
   font-size: 10px;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
 }
 
 .tap-cf-arrow {
@@ -5376,12 +5421,14 @@ body {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  padding: 0 4px;
 }
 
 .tap-cf-dist,
 .tap-cf-time {
   font-size: 10px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .tap-arrow-line {
@@ -5410,6 +5457,18 @@ body {
 .tap-cf-stat strong {
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.tap-table-node-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tap-table-sub {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 /* OD Table */

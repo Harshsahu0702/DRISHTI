@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { api } from "../services/api";
+import { api, getCanonicalCameraName, getCanonicalJunctionName } from "../services/api";
 import {
   Car,
   Navigation2,
@@ -27,6 +27,49 @@ import {
   MapPin,
   ScanLine,
 } from "lucide-react";
+
+// Helper to sanitize camera and junction details for clean display without duplicate prefixes
+function getCleanNodeDetails(camId, rawName) {
+  const canonical = getCanonicalCameraName(camId);
+  const raw = rawName || canonical;
+
+  let cleanTitle = canonical;
+  if (!canonical || canonical === "Surveillance Camera") {
+    cleanTitle = raw || "Camera Node";
+  }
+
+  if (raw && (raw.includes(" — ") || raw.includes(" - "))) {
+    const parts = raw.split(/\s*[—–-]\s*/);
+    if (
+      parts.length >= 3 &&
+      parts[0].toLowerCase().includes("junction") &&
+      parts[parts.length - 2]?.toLowerCase().includes("junction")
+    ) {
+      cleanTitle = canonical || `${parts[parts.length - 2]} — ${parts[parts.length - 1]}`;
+    }
+  }
+
+  const shortCam = cleanTitle.replace(/^Junction\s+[A-Z]\s*[—–-]\s*/i, "").trim() || cleanTitle;
+  const junction = getCanonicalJunctionName(camId || raw);
+
+  let junctionCode = "Junction A";
+  const str = `${camId || ""} ${raw || ""}`.toLowerCase();
+  if (
+    str.includes("junction_b") ||
+    str.includes("junction b") ||
+    str.includes("north gate") ||
+    str.includes("kanyapur")
+  ) {
+    junctionCode = "Junction B";
+  }
+
+  return {
+    fullTitle: cleanTitle,
+    shortCam,
+    junction,
+    junctionCode,
+  };
+}
 
 export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSurveillance, onSelectVehicle }) {
   const kpis = analytics?.kpis || {};
@@ -473,7 +516,7 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
               <div className="tap-bn-top">
                 <AlertOctagon size={18} style={{ color: "var(--status-error, #ef4444)" }} />
                 <span>
-                  <strong>TRAFFIC JAM ALERT:</strong> {bottlenecks[0].junction_name} ({bottlenecks[0].camera_name})
+                  <strong>TRAFFIC JAM ALERT:</strong> {bottlenecks[0].junction_name} ({getCleanNodeDetails(bottlenecks[0].camera_id, bottlenecks[0].camera_name).shortCam})
                 </span>
               </div>
               <p className="tap-bn-desc">
@@ -610,49 +653,70 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
 
         {/* Visual Corridor Cards Preview */}
         <div className="tap-corridor-cards-row">
-          {filteredOdMatrix.map((od, i) => (
-            <div key={i} className="tap-corridor-flow-card">
-              <div className="tap-cf-top font-mono">
-                <span className="tap-cf-badge">CORRIDOR #{i + 1}</span>
-                <span className="tap-cf-share">{od.share_pct}% OF ALL MOVEMENT</span>
-              </div>
+          {filteredOdMatrix.map((od, i) => {
+            const origNode = getCleanNodeDetails(od.origin_camera_id, od.origin_name);
+            const destNode = getCleanNodeDetails(od.destination_camera_id, od.destination_name);
 
-              <div className="tap-cf-nodes font-mono">
-                <div className="tap-cf-node">
-                  <span className="tap-node-dot origin"></span>
-                  <div className="tap-node-title">{od.origin_name || od.origin_camera_id}</div>
-                  <div className="tap-node-sub">Origin Entry</div>
+            return (
+              <div key={i} className="tap-corridor-flow-card">
+                <div className="tap-cf-top font-mono">
+                  <span className="tap-cf-badge">CORRIDOR #{i + 1}</span>
+                  <span className="tap-cf-share">{od.share_pct}% OF ALL MOVEMENT</span>
                 </div>
 
-                <div className="tap-cf-arrow">
-                  <span className="tap-cf-dist font-mono">{od.distance_m}m</span>
-                  <div className="tap-arrow-line">
-                    <ArrowRight size={16} />
+                <div className="tap-cf-nodes font-mono">
+                  <div className="tap-cf-node">
+                    <div className="tap-cf-node-meta">
+                      <span className="tap-node-dot origin"></span>
+                      <span className="tap-node-role">Origin Entry</span>
+                      <span className="tap-node-junc-tag">{origNode.junctionCode}</span>
+                    </div>
+                    <div className="tap-node-title" title={origNode.shortCam}>
+                      {origNode.shortCam}
+                    </div>
+                    <div className="tap-node-sub" title={origNode.junction}>
+                      {origNode.junction}
+                    </div>
                   </div>
-                  <span className="tap-cf-time font-mono">{od.avg_travel_time_sec}s avg</span>
+
+                  <div className="tap-cf-arrow">
+                    <span className="tap-cf-dist font-mono">{od.distance_m}m</span>
+                    <div className="tap-arrow-line">
+                      <ArrowRight size={16} />
+                    </div>
+                    <span className="tap-cf-time font-mono">{od.avg_travel_time_sec}s avg</span>
+                  </div>
+
+                  <div className="tap-cf-node">
+                    <div className="tap-cf-node-meta">
+                      <span className="tap-node-dot destination"></span>
+                      <span className="tap-node-role">Destination Exit</span>
+                      <span className="tap-node-junc-tag">{destNode.junctionCode}</span>
+                    </div>
+                    <div className="tap-node-title" title={destNode.shortCam}>
+                      {destNode.shortCam}
+                    </div>
+                    <div className="tap-node-sub" title={destNode.junction}>
+                      {destNode.junction}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="tap-cf-node">
-                  <span className="tap-node-dot destination"></span>
-                  <div className="tap-node-title">{od.destination_name || od.destination_camera_id}</div>
-                  <div className="tap-node-sub">Destination Exit</div>
+                <div className="tap-cf-bottom font-mono">
+                  <div className="tap-cf-stat">
+                    <span>TRANSIT VOLUME</span>
+                    <strong>{od.count} VEHICLES</strong>
+                  </div>
+                  <div className="tap-cf-stat" style={{ textAlign: "right" }}>
+                    <span>DERIVED VELOCITY</span>
+                    <strong style={{ color: "var(--status-success)" }}>
+                      {od.estimated_speed_kmh ? `${od.estimated_speed_kmh} km/h` : "N/A"}
+                    </strong>
+                  </div>
                 </div>
               </div>
-
-              <div className="tap-cf-bottom font-mono">
-                <div className="tap-cf-stat">
-                  <span>TRANSIT VOLUME</span>
-                  <strong>{od.count} VEHICLES</strong>
-                </div>
-                <div className="tap-cf-stat" style={{ textAlign: "right" }}>
-                  <span>DERIVED VELOCITY</span>
-                  <strong style={{ color: "var(--status-success)" }}>
-                    {od.estimated_speed_kmh ? `${od.estimated_speed_kmh} km/h` : "N/A"}
-                  </strong>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Comprehensive OD Table */}
@@ -679,21 +743,31 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
                   </td>
                 </tr>
               ) : (
-                filteredOdMatrix.map((od, i) => (
-                  <tr key={`${od.origin_camera_id}-${od.destination_camera_id}-${i}`}>
-                    <td>
-                      <span className="tap-table-node-badge origin">
-                        {od.origin_name || od.origin_camera_id}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: "center", color: "var(--drishti-blue)" }}>
-                      <ArrowRight size={15} />
-                    </td>
-                    <td>
-                      <span className="tap-table-node-badge destination">
-                        {od.destination_name || od.destination_camera_id}
-                      </span>
-                    </td>
+                filteredOdMatrix.map((od, i) => {
+                  const origNode = getCleanNodeDetails(od.origin_camera_id, od.origin_name);
+                  const destNode = getCleanNodeDetails(od.destination_camera_id, od.destination_name);
+
+                  return (
+                    <tr key={`${od.origin_camera_id}-${od.destination_camera_id}-${i}`}>
+                      <td>
+                        <div className="tap-table-node-cell">
+                          <span className="tap-table-node-badge origin">
+                            {origNode.shortCam}
+                          </span>
+                          <span className="tap-table-sub">{origNode.junction}</span>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "center", color: "var(--drishti-blue)" }}>
+                        <ArrowRight size={15} />
+                      </td>
+                      <td>
+                        <div className="tap-table-node-cell">
+                          <span className="tap-table-node-badge destination">
+                            {destNode.shortCam}
+                          </span>
+                          <span className="tap-table-sub">{destNode.junction}</span>
+                        </div>
+                      </td>
                     <td style={{ textAlign: "center", fontSize: "12px", color: "var(--text-secondary)" }}>
                       {od.corridor_label || "North-South Corridor"}
                     </td>
@@ -715,7 +789,8 @@ export function TrafficAnalyticsPage({ analytics, cameras, vehicles, onBackToSur
                       </span>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
