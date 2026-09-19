@@ -47,10 +47,12 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const [showPauseBanner, setShowPauseBanner] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [usingFallbackSrc, setUsingFallbackSrc] = useState(false);
+  const [isFullStream, setIsFullStream] = useState(false);
   const [videoError, setVideoError] = useState(false);
 
   const hasStartedRef = useRef(false);
   const hasAutoPausedRef = useRef(false);
+  const isFullStreamRef = useRef(false);
   const playbackRateRef = useRef(1);
 
   // Normalize camera & timings
@@ -74,6 +76,17 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const primaryVideoUrl = api.getEvidenceClipUrl(canonicalCamId, timestampSec, actualPreRoll, evidenceDuration);
   const fallbackVideoUrl = api.getCameraVideoUrl(canonicalCamId);
   const activeVideoUrl = usingFallbackSrc ? fallbackVideoUrl : primaryVideoUrl;
+
+  // Detect whether the loaded video is an un-trimmed full-length CCTV stream (> 20s)
+  const checkIsFullStream = useCallback((vid) => {
+    if (!vid) return isFullStreamRef.current;
+    const full = usingFallbackSrc || Boolean(Number.isFinite(vid.duration) && vid.duration > effectiveDuration + 5);
+    if (full !== isFullStreamRef.current) {
+      isFullStreamRef.current = full;
+      setIsFullStream(full);
+    }
+    return full;
+  }, [usingFallbackSrc, effectiveDuration]);
 
   // Direct DOM updates for zero-lag 60fps seek bar & time ribbon sync
   const updateTimelineDOM = useCallback((relCt) => {
@@ -137,6 +150,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
       setIsPlaying(false);
       setShowPauseBanner(false);
       setUsingFallbackSrc(false);
+      setIsFullStream(false);
+      isFullStreamRef.current = false;
       setVideoError(false);
       return;
     }
@@ -153,6 +168,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     setShowPauseBanner(false);
     setVideoError(false);
     setUsingFallbackSrc(false);
+    setIsFullStream(false);
+    isFullStreamRef.current = false;
     setPlaybackRate(1);
     playbackRateRef.current = 1;
 
@@ -164,12 +181,13 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
       }
       if (vid.readyState >= 2 && !hasStartedRef.current) {
         hasStartedRef.current = true;
-        vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
+        const full = checkIsFullStream(vid);
+        vid.currentTime = full ? clipStartSec : 0;
         updateTimelineDOMRef.current?.(0);
         vid.play().then(() => setIsPlaying(true)).catch(() => {});
       }
     }
-  }, [isOpen, canonicalCamId, timestampSec, clipStartSec, usingFallbackSrc]);
+  }, [isOpen, canonicalCamId, timestampSec, clipStartSec, usingFallbackSrc, checkIsFullStream]);
 
   // High-frequency animation tick during active playback (60 FPS millisecond precision)
   useEffect(() => {
@@ -178,7 +196,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     const tick = () => {
       const vid = videoRef.current;
       if (vid && !vid.paused) {
-        const currentRel = usingFallbackSrc
+        const full = isFullStreamRef.current || checkIsFullStream(vid);
+        const currentRel = full
           ? Math.max(0, vid.currentTime - clipStartSec)
           : vid.currentTime;
         updateTimelineDOM(currentRel);
@@ -187,7 +206,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
         if (!hasAutoPausedRef.current && currentRel >= targetRelativeSec) {
           hasAutoPausedRef.current = true;
           vid.pause();
-          const pauseSeek = usingFallbackSrc ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
+          const pauseSeek = full ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
           vid.currentTime = pauseSeek;
           setIsPlaying(false);
           setAutoPaused(true);
@@ -199,7 +218,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     };
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
-  }, [isOpen, usingFallbackSrc, clipStartSec, targetRelativeSec, updateTimelineDOM]);
+  }, [isOpen, checkIsFullStream, clipStartSec, targetRelativeSec, updateTimelineDOM]);
 
   if (!isOpen || !eventData) return null;
 
@@ -222,17 +241,31 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   }
 
   // ── Video Event Handlers ──
+  const handleLoadedMetadata = () => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    setVideoReady(true);
+    const full = checkIsFullStream(vid);
+    if (full) {
+      if (!hasStartedRef.current || vid.currentTime < clipStartSec - 0.5) {
+        vid.currentTime = clipStartSec;
+      }
+    }
+  };
+
   const handleCanPlay = () => {
     const vid = videoRef.current;
     if (!vid) return;
     setVideoReady(true);
     setVideoError(false);
 
+    const full = checkIsFullStream(vid);
+
     if (hasStartedRef.current) return;
     hasStartedRef.current = true;
 
     vid.playbackRate = playbackRateRef.current;
-    const initialTime = usingFallbackSrc ? clipStartSec : 0;
+    const initialTime = full ? clipStartSec : 0;
     vid.currentTime = initialTime;
     updateTimelineDOM(0);
 
@@ -245,6 +278,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     console.warn("[EvidencePlayback] Primary evidence clip error, falling back to full camera feed:", e);
     if (!usingFallbackSrc) {
       setUsingFallbackSrc(true);
+      isFullStreamRef.current = true;
+      setIsFullStream(true);
       setVideoReady(false);
       hasStartedRef.current = false;
     } else {
@@ -257,7 +292,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     const vid = videoRef.current;
     if (!vid) return;
 
-    const relCt = usingFallbackSrc
+    const full = isFullStreamRef.current || checkIsFullStream(vid);
+    const relCt = full
       ? Math.max(0, vid.currentTime - clipStartSec)
       : vid.currentTime;
 
@@ -265,7 +301,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
     if (!hasAutoPausedRef.current && !vid.paused && relCt >= targetRelativeSec) {
       hasAutoPausedRef.current = true;
       vid.pause();
-      const pauseSeek = usingFallbackSrc ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
+      const pauseSeek = full ? (clipStartSec + targetRelativeSec) : targetRelativeSec;
       vid.currentTime = pauseSeek;
       setIsPlaying(false);
       setAutoPaused(true);
@@ -276,7 +312,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
 
     // End of 15-second evidence clip boundary
     if (relCt >= effectiveDuration) {
-      const finalSeek = usingFallbackSrc ? clipStartSec + effectiveDuration : effectiveDuration;
+      const finalSeek = full ? clipStartSec + effectiveDuration : effectiveDuration;
       vid.currentTime = finalSeek;
       vid.pause();
       setIsPlaying(false);
@@ -290,13 +326,14 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const handlePlayPause = () => {
     const vid = videoRef.current;
     if (!vid) return;
+    const full = isFullStreamRef.current || checkIsFullStream(vid);
     if (vid.paused) {
-      const relCt = usingFallbackSrc
+      const relCt = full
         ? Math.max(0, vid.currentTime - clipStartSec)
         : vid.currentTime;
       // If at end of clip, restart from beginning
       if (relCt >= effectiveDuration - 0.1) {
-        vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
+        vid.currentTime = full ? clipStartSec : 0;
         hasAutoPausedRef.current = false;
       }
       setAutoPaused(false);
@@ -317,7 +354,8 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const handleReplayFromStart = () => {
     const vid = videoRef.current;
     if (!vid) return;
-    vid.currentTime = usingFallbackSrc ? clipStartSec : 0;
+    const full = isFullStreamRef.current || checkIsFullStream(vid);
+    vid.currentTime = full ? clipStartSec : 0;
     hasAutoPausedRef.current = false;
     setAutoPaused(false);
     setShowPauseBanner(false);
@@ -328,11 +366,12 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   const handleSeekBar = (e) => {
     const vid = videoRef.current;
     if (!vid) return;
+    const full = isFullStreamRef.current || checkIsFullStream(vid);
     const offset = parseFloat(e.target.value);
     const targetRel = Math.max(0, Math.min(effectiveDuration, offset));
-    vid.currentTime = usingFallbackSrc ? clipStartSec + targetRel : targetRel;
+    vid.currentTime = full ? clipStartSec + targetRel : targetRel;
     // If seeked before detection moment, re-arm auto-pause
-    if (targetRel < EVIDENCE_PRE_ROLL - 0.2) {
+    if (targetRel < actualPreRoll - 0.2) {
       hasAutoPausedRef.current = false;
     }
     updateTimelineDOM(targetRel);
@@ -431,7 +470,7 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
                 muted={isMuted}
                 playsInline
                 preload="auto"
-                onLoadedMetadata={() => setVideoReady(true)}
+                onLoadedMetadata={handleLoadedMetadata}
                 onLoadedData={() => setVideoReady(true)}
                 onCanPlay={handleCanPlay}
                 onPlaying={() => {
