@@ -224,7 +224,6 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
 
   const {
     plate = "TARGET",
-    plateImage,
     vehicleType = "car",
     confidence = 0.96,
     isBlacklisted = false,
@@ -232,13 +231,6 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
   } = eventData;
 
   const confPercent = Math.round(confidence <= 1 ? confidence * 100 : confidence);
-
-  let imageUrl = null;
-  if (plateImage) {
-    imageUrl = plateImage.startsWith("http") || plateImage.startsWith("/")
-      ? plateImage
-      : api.getPlateImageUrl(plateImage);
-  }
 
   // ── Video Event Handlers ──
   const handleLoadedMetadata = () => {
@@ -700,18 +692,6 @@ export function EvidencePlaybackModal({ isOpen, onClose, eventData }) {
               <div className="plate-conf-badge">{confPercent}% CONF</div>
             </div>
 
-            {/* Plate crop thumbnail */}
-            {imageUrl && (
-              <div className="ev2-plate-thumb-wrap">
-                <img
-                  src={imageUrl}
-                  alt={`Plate crop ${plate}`}
-                  className="ev2-plate-thumb"
-                  onError={(e) => { e.target.style.display = "none"; }}
-                />
-                <span className="ev2-thumb-label font-mono">OCR Crop</span>
-              </div>
-            )}
 
             {/* Spec grid */}
             <div className="evidence-specs-grid font-mono">
