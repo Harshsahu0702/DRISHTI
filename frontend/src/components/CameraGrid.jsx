@@ -62,7 +62,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
     setCustomStreamUrls(updated);
     try {
       localStorage.setItem("drishti_custom_camera_streams", JSON.stringify(updated));
-    } catch (_) {}
+    } catch (_) { }
     setStreamSuccessMsg(`Custom stream connected to ${getCanonicalCameraName(targetCamForStream)}!`);
     setTimeout(() => {
       setStreamSuccessMsg("");
@@ -77,7 +77,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
     setCustomStreamUrls(updated);
     try {
       localStorage.setItem("drishti_custom_camera_streams", JSON.stringify(updated));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   // Pause all background CCTV videos when evidence modal opens; resume when it closes
@@ -102,7 +102,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
               .then(() => {
                 setPlayingStates((prev) => ({ ...prev, [camId]: true }));
               })
-              .catch(() => {});
+              .catch(() => { });
           }
         }
       });
@@ -316,10 +316,7 @@ export const CameraGrid = forwardRef(function CameraGrid(
       <div className="section-header-block" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "12px" }}>
         <div>
           <div className="section-eyebrow">Synchronized CCTV Feeds</div>
-          <h2 className="section-main-heading">Live Camera Surveillance Network</h2>
-          <p className="section-subtext">
-            Continuous optical surveillance across Junction A (South Gate) & Junction B (North Gate) demonstration corridors.
-          </p>
+
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button
@@ -393,9 +390,8 @@ export const CameraGrid = forwardRef(function CameraGrid(
                   <div
                     key={cam.id}
                     id={`camera-card-${cam.id}`}
-                    className={`camera-unit-card ${
-                      isSelected ? "is-selected" : ""
-                    } ${isHighlighted ? "is-highlighted" : ""}`}
+                    className={`camera-unit-card ${isSelected ? "is-selected" : ""
+                      } ${isHighlighted ? "is-highlighted" : ""}`}
                     onClick={() => onCameraSelect && onCameraSelect(cam.id)}
                   >
                     {/* Unit Header */}
