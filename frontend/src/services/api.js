@@ -961,6 +961,32 @@ export const api = {
       return null;
     }
   },
+
+  /* =========================================================
+     DRISHTI-GPT AI COPILOT
+  ========================================================= */
+  async askDrishtiGpt(query, context = null) {
+    try {
+      return await request("/api/v1/copilot/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, context }),
+      });
+    } catch (error) {
+      console.warn("[API] askDrishtiGpt failed:", error);
+      throw error;
+    }
+  },
+
+  async getDrishtiGptSuggestions() {
+    try {
+      const res = await request("/api/v1/copilot/suggestions");
+      return res?.suggestions || [];
+    } catch (error) {
+      console.warn("[API] getDrishtiGptSuggestions failed:", error);
+      return [];
+    }
+  },
 };
 
 /* =========================================================

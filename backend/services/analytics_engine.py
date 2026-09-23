@@ -207,8 +207,10 @@ class AnalyticsEngine:
         od_matrix_list = [
             {
                 "origin_junction_id": "junction_A",
+                "origin_camera_id": "junction_A_camera_01",
                 "origin_name": "Junction A — Vivekananda Sarani (South Gate)",
                 "destination_junction_id": "junction_B",
+                "destination_camera_id": "junction_B_camera_01",
                 "destination_name": "Junction B — Kanyapur Link Road (North Gate)",
                 "transition_label": "Vivekananda Sarani → Kanyapur Link Road",
                 "corridor_label": "Main Highway Corridor (South Gate → North Gate)",
@@ -220,8 +222,10 @@ class AnalyticsEngine:
             },
             {
                 "origin_junction_id": "junction_B",
+                "origin_camera_id": "junction_B_camera_01",
                 "origin_name": "Junction B — Kanyapur Link Road (North Gate)",
                 "destination_junction_id": "junction_A",
+                "destination_camera_id": "junction_A_camera_01",
                 "destination_name": "Junction A — Vivekananda Sarani (South Gate)",
                 "transition_label": "Kanyapur Link Road → Vivekananda Sarani",
                 "corridor_label": "Return Highway Corridor (North Gate → South Gate)",

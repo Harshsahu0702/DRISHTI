@@ -13,6 +13,7 @@ import { TrafficAnalyticsPage } from "./components/TrafficAnalyticsPage";
 import { SystemValidationPage } from "./components/SystemValidationPage";
 import { EvidencePlaybackModal } from "./components/EvidencePlaybackModal";
 import { FullMapModal } from "./components/FullMapModal";
+import { DrishtiGptCopilot } from "./components/DrishtiGptCopilot";
 import {
   api,
   normalizeCameraId,
@@ -41,6 +42,7 @@ export default function App() {
   const [evidenceModalData, setEvidenceModalData] = useState(null);
   const [blacklistRefreshTrigger, setBlacklistRefreshTrigger] = useState(0);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
   const showToast = (message) => {
     setToastMessage(message);
@@ -208,6 +210,18 @@ export default function App() {
     }, 10000);
 
     return () => clearInterval(pollInterval);
+  }, []);
+
+  /* KEYBOARD SHORTCUT: CTRL + K TO TOGGLE DRISHTI-GPT */
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCopilotOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
   /* EVIDENCE PLAY MODAL TRIGGER */
@@ -678,6 +692,28 @@ export default function App() {
         selectedCameraId={selectedCameraId}
         onCameraSelect={handleCameraSelect}
         onPlayEvent={handlePlayEvent}
+      />
+
+      {/* DRISHTI-GPT AI FORENSIC COPILOT HUD */}
+      <DrishtiGptCopilot
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        onOpen={() => setIsCopilotOpen(true)}
+        onTraceVehicle={handleTraceVehicleJourneyOnMap}
+        onPlayEvidence={handlePlayEvent}
+        onOpenDossier={handleOpenDossier}
+        onIssueChallan={(plate, vehicle) => {
+          setSelectedVehicle(vehicle || { plate });
+          setIsDetailModalOpen(true);
+        }}
+        onSelectCamera={handleCameraSelect}
+        onSwitchTab={(tab) => {
+          setActiveTab(tab);
+          setIsCopilotOpen(false);
+        }}
+        onOpenAddBlacklist={() => {
+          setIsAddBlacklistModalOpen(true);
+        }}
       />
 
       {/* TOAST NOTIFICATION */}

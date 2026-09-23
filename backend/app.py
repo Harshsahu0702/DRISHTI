@@ -138,6 +138,11 @@ class BlacklistUpdateRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class CopilotQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="Natural language query or voice transcription")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Optional UI context")
+
+
 # ============================================================
 # ROOT / HEALTH
 # ============================================================
@@ -1616,6 +1621,44 @@ def get_system_health_summary():
         "dynamic_signal_optimizer": "ACTIVE",
         "automated_test_suites": "39/39 PASSING",
     }
+
+
+# ============================================================
+# DRISHTI-GPT AI COPILOT ENDPOINTS
+# ============================================================
+
+@app.post("/api/v1/copilot/query")
+def copilot_query(request_body: CopilotQueryRequest):
+    """
+    DRISHTI-GPT AI Conversational Forensic & Smart City Copilot.
+    Natural language query processing with multi-intent classification,
+    speech synthesis text, and actionable UI execution cards.
+    """
+    try:
+        from backend.services.drishti_gpt_service import DrishtiGPTService
+        response = DrishtiGPTService.process_query(request_body.query, request_body.context)
+        return JSONResponse(status_code=status.HTTP_200_OK, content=response)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"DRISHTI-GPT copilot execution error: {exc}",
+        )
+
+
+@app.get("/api/v1/copilot/suggestions")
+def copilot_suggestions():
+    """
+    Return dynamic contextual prompt suggestions for DRISHTI-GPT copilot.
+    """
+    try:
+        from backend.services.drishti_gpt_service import DrishtiGPTService
+        suggestions = DrishtiGPTService.get_contextual_suggestions()
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"suggestions": suggestions})
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch copilot suggestions: {exc}",
+        )
 
 
 # ============================================================
