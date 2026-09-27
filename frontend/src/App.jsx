@@ -729,7 +729,8 @@ export default function App() {
         }}
         onSelectCamera={handleCameraSelect}
         onSwitchTab={(tab) => {
-          setActiveTab(tab);
+          const targetTab = tab === "live-anpr" || tab === "live_anpr" ? "live_anpr" : tab;
+          setActiveTab(targetTab);
           setIsCopilotOpen(false);
         }}
         onOpenAddBlacklist={() => {

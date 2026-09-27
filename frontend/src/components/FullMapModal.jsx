@@ -765,9 +765,11 @@ export function FullMapModal({
                     event.timestamp ??
                     0;
                   const duration = event.duration_sec ?? event.duration;
-                  const cameraId = event.camera_id;
                   const isLatest = index === rawSightingEvents.length - 1;
-                  const isCurrentTargetNode = interpolatedState?.currentSegmentIndex === index;
+                  const activeNodeIndex = rawSightingEvents.length > 1
+                    ? Math.min(rawSightingEvents.length - 1, Math.round(animProgress * (rawSightingEvents.length - 1)))
+                    : 0;
+                  const isCurrentTargetNode = activeNodeIndex === index;
 
                   return (
                     <div

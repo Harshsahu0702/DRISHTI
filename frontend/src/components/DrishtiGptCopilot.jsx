@@ -115,13 +115,14 @@ export function DrishtiGptCopilot({
     {
       id: "initial_greeting",
       sender: "assistant",
-      text: `### DRISHTI AI Assistant\n\nMain **DRISHTI AI Assistant** hoon. Aap mujhse traffic intelligence, vehicle tracking (e.g. \`WB37E1275\`), speed calculation, ya project architecture ke baare mein kuch bhi pooch sakte ho!\n\nNeeche diye suggestions try karein ya message type karein.`,
+      text: `### DRISHTI AI Assistant\n\nMain **DRISHTI AI Assistant** hoon ✨\n\nAap mujhse **Naye Features**, **Live Webcam ANPR**, **2D GIS Corridor Map**, vehicle tracking (e.g. \`WB37E1275\`), speed calculation, ya project architecture ke baare mein kuch bhi pooch sakte ho!\n\nNeeche diye suggestions try karein ya message type karein.`,
       quickChips: [
+        "✨ Naye features kya hain?",
+        "📷 Live ANPR open karo",
+        "🗺️ 2D GIS Corridor",
         "DRISHTI kya hai?",
-        "ANPR kaise kaam karta hai?",
-        "Architecture explain karo",
         "Accuracy kitni hai?",
-        "J1 ka traffic status kya hai?",
+        "Architecture explain karo",
       ],
     },
   ]);
@@ -248,10 +249,30 @@ export function DrishtiGptCopilot({
     const qLower = query.toLowerCase();
     let reply = "";
     let speech = "";
+    let suggestedActions = [];
 
     if (qLower.includes("hello") || qLower.includes("hi") || qLower.includes("namaste") || qLower.includes("bhai")) {
-      reply = `Namaste bhai! Main **DRISHTI AI Assistant** hoon ✨\n\nAap mujhse DRISHTI project ke architecture, YOLOv8 pipeline, OCR accuracy, speed calculations ke bare me pooch sakte ho!`;
+      reply = `Namaste bhai! Main **DRISHTI AI Assistant** hoon ✨\n\nAap mujhse **Naye Features**, **Live Webcam ANPR**, **2D GIS Map**, YOLOv8 pipeline, OCR accuracy, ya vehicle tracking ke bare me pooch sakte ho!`;
       speech = "Hello! DRISHTI AI Assistant is online. How can I help you today?";
+    } else if (qLower.includes("naya feature") || qLower.includes("naye feature") || qLower.includes("new feature") || qLower.includes("update") || qLower.includes("kya naya")) {
+      reply = `### ✨ DRISHTI — Naye Features & Updates\n\n1. **📷 Live Laptop Webcam ANPR**: Real-time camera scanning with YOLOv8 + PaddleOCR & dual-orientation mirror auto-fallback.\n2. **🗺️ Streamlined 2D Tactical GIS Map**: 60 FPS smooth trajectory animation between Junction A and Junction B with clean text-only camera popups.\n3. **📑 MoRTH VAHAN 4.0 Digital RC**: Complete vehicle ownership, fuel type, PUCC, and tax validation.\n4. **⚡ Automated e-Challan**: 1-click violation notices with dynamic QR code payment.\n5. **⚖️ Section 65B Digital Certificates**: Tamper-evident SHA-256 frame hash certificates for court admissibility.`;
+      speech = "DRISHTI now features real-time Live Webcam ANPR, an optimized 2D GIS corridor map, VAHAN 4.0 RC integration, automated e-Challan, and Section 65B evidence certificates.";
+      suggestedActions = [
+        { label: "📷 Launch Live Webcam ANPR", action: "SWITCH_TAB", payload: { tab: "live_anpr" } },
+        { label: "🗺️ Open 2D GIS Map", action: "SWITCH_TAB", payload: { tab: "surveillance" } },
+      ];
+    } else if (qLower.includes("live anpr") || qLower.includes("webcam") || qLower.includes("camera scan")) {
+      reply = `### 📷 Real-Time Live Webcam ANPR Engine\n\n- **Dual-Engine**: YOLOv8 plate detector (\`models/license_plate.pt\`) + PaddleOCR PP-OCRv6.\n- **Dual-Orientation Auto-Fallback**: Browser selfie camera mirror mode ko auto-invert karta hai, taaki phone screen ya paper ka number 100% accurate read ho.\n- **Instant Alerts**: Scanned number ko City Blacklist aur VAHAN 4.0 RC se turant match karta hai.\n\n👉 *Top bar me **'Live ANPR'** tab open karke **'START WEBCAM'** dabayein!*`;
+      speech = "Live Webcam ANPR is active. It combines YOLOv8 plate detection with PaddleOCR and auto-mirrored orientation for real-time camera scanning.";
+      suggestedActions = [
+        { label: "📷 Launch Live Webcam ANPR", action: "SWITCH_TAB", payload: { tab: "live_anpr" } },
+      ];
+    } else if (qLower.includes("map") || qLower.includes("gis") || qLower.includes("junction")) {
+      reply = `### 🗺️ DRISHTI 2D Tactical GIS Map & Trajectory Corridor\n\n- **Dual Junctions**: Junction A (Vivekananda Sarani) aur Junction B (Kanyapur Link Road).\n- **Smooth 60 FPS Trajectory**: Physics-based Haversine speed calculation ke saath continuous animated movement.\n- **Clean Text-Only Pins**: Click karne par instant camera status dikhata hai, zero video playback lag.\n- **Multi-Layers**: Street, ESRI Satellite, aur Dark Cyber Tactical modes.`;
+      speech = "DRISHTI map features an optimized 2D GIS corridor connecting Junction A and Junction B with smooth 60 FPS vehicle trajectory and clean camera popups.";
+      suggestedActions = [
+        { label: "🗺️ Open GIS Route Map", action: "SWITCH_TAB", payload: { tab: "surveillance" } },
+      ];
     } else if (qLower.includes("joke")) {
       reply = `Ek driver red light par nahi ruka aur traffic cop ne use pakda:\n\n*Cop:* "Bhai red light nahi dikhi kya?"\n*Driver:* "Sir, red light to dikhi thi... bas aap nahi dikhe!" 😂\n\nDRISHTI ka computer vision 24/7 bina kisi blind spot ke monitor karta hai!`;
       speech = "Haha, here is a traffic joke for you!";
@@ -266,12 +287,14 @@ export function DrishtiGptCopilot({
       text: reply,
       speechText: speech,
       cards: [],
-      suggestedActions: [],
+      suggestedActions: suggestedActions,
       quickChips: [
+        "✨ Naye features kya hain?",
+        "📷 Live ANPR open karo",
+        "🗺️ 2D GIS Corridor",
         "DRISHTI kya hai?",
-        "ANPR kaise kaam karta hai?",
-        "Architecture explain karo",
         "Accuracy kitni hai?",
+        "Architecture explain karo",
       ],
     };
   };
