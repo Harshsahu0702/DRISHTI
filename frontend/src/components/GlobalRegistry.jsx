@@ -21,16 +21,28 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  const totalRawCount = vehicles?.length || 0;
+  // Strictly filter only vehicles with verified recognized license plates (exclude raw tracker IDs like trk379)
+  const plateOnlyVehicles = useMemo(() => {
+    return (vehicles || []).filter((v) => {
+      if (!v) return false;
+      const plate = (v.plate || "").trim();
+      const gid = (v.global_vehicle_id || "").trim();
+      const isTrackerOnly =
+        plate.startsWith("GLOBAL_") ||
+        plate.startsWith("TRACK_") ||
+        plate.includes("_trk") ||
+        plate.includes("camera_") ||
+        gid.includes("_trk");
+      return (v.has_plate || plate.length >= 5) && !isTrackerOnly && plate.length > 0;
+    });
+  }, [vehicles]);
 
   const filteredVehicles = useMemo(() => {
-    let list = vehicles || [];
+    let list = plateOnlyVehicles;
 
     // 1. Primary Filter Tab
     if (filter === "matched") {
       list = list.filter((v) => (v.camera_count || 1) > 1);
-    } else if (filter === "anpr") {
-      list = list.filter((v) => v.has_plate);
     } else if (filter === "junction_A") {
       list = list.filter((v) =>
         (v.junctions || []).includes("Vivekananda Sarani") ||
@@ -66,34 +78,16 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
     // 4. Sorting
     const sorted = [...list];
     if (sortBy === "observations") {
-      sorted.sort((a, b) => {
-        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
-          return b.has_plate ? 1 : -1;
-        }
-        return (b.observation_count || 1) - (a.observation_count || 1);
-      });
+      sorted.sort((a, b) => (b.observation_count || 1) - (a.observation_count || 1));
     } else if (sortBy === "cameras") {
-      sorted.sort((a, b) => {
-        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
-          return b.has_plate ? 1 : -1;
-        }
-        return (b.camera_count || 1) - (a.camera_count || 1);
-      });
+      sorted.sort((a, b) => (b.camera_count || 1) - (a.camera_count || 1));
     } else if (sortBy === "first_seen") {
       sorted.sort((a, b) => (a.first_seen || 0) - (b.first_seen || 0));
     } else if (sortBy === "plate") {
-      sorted.sort((a, b) => {
-        if (Boolean(b.has_plate) !== Boolean(a.has_plate)) {
-          return b.has_plate ? 1 : -1;
-        }
-        return (a.plate || a.global_vehicle_id || "").localeCompare(b.plate || b.global_vehicle_id || "");
-      });
+      sorted.sort((a, b) => (a.plate || "").localeCompare(b.plate || ""));
     } else {
-      // Default: Recognized ANPR plates first, then cross-camera, then observation count
+      // Default: Cross-camera first, then observation count
       sorted.sort((a, b) => {
-        const aPlate = a.has_plate ? 1 : 0;
-        const bPlate = b.has_plate ? 1 : 0;
-        if (bPlate !== aPlate) return bPlate - aPlate;
         const aCross = (a.camera_count || 1) > 1 ? 1 : 0;
         const bCross = (b.camera_count || 1) > 1 ? 1 : 0;
         if (bCross !== aCross) return bCross - aCross;
@@ -102,7 +96,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
     }
 
     return sorted;
-  }, [vehicles, filter, typeFilter, searchTerm, sortBy]);
+  }, [plateOnlyVehicles, filter, typeFilter, searchTerm, sortBy]);
 
   const totalPages = Math.ceil(filteredVehicles.length / pageSize) || 1;
   const paginatedVehicles = filteredVehicles.slice(
@@ -118,12 +112,12 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
           <div className="section-eyebrow">Vehicle Database</div>
           <h2 className="section-main-heading">All Tracked Vehicles Registry</h2>
           <p className="section-subtext">
-            Complete list of vehicles tracked across city CCTV cameras by AI.
+            Confirmed vehicles with recognized number plates tracked across city CCTV cameras.
           </p>
         </div>
         <div style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-muted)" }}>
           ACTIVE VEHICLES: <span className="font-mono" style={{ color: "var(--drishti-blue)" }}>{filteredVehicles.length}</span>
-          <span style={{ color: "var(--text-dim)", marginLeft: "4px" }}>/ {totalRawCount} Total</span>
+          <span style={{ color: "var(--text-dim)", marginLeft: "4px" }}>/ {plateOnlyVehicles.length} Total Plates</span>
         </div>
       </div>
 
@@ -138,7 +132,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
               setPage(1);
             }}
           >
-            All ({vehicles.length})
+            All Plates ({plateOnlyVehicles.length})
           </button>
           <button
             type="button"
@@ -148,17 +142,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
               setPage(1);
             }}
           >
-            Cross-Camera ({vehicles.filter((v) => (v.camera_count || 1) > 1).length})
-          </button>
-          <button
-            type="button"
-            className={`registry-filter-chip ${filter === "anpr" ? "is-active" : ""}`}
-            onClick={() => {
-              setFilter("anpr");
-              setPage(1);
-            }}
-          >
-            Plates Recognized ({vehicles.filter((v) => v.has_plate).length})
+            Cross-Camera ({plateOnlyVehicles.filter((v) => (v.camera_count || 1) > 1).length})
           </button>
           <button
             type="button"
@@ -168,7 +152,11 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
               setPage(1);
             }}
           >
-            Vivekananda Sarani
+            Vivekananda Sarani ({plateOnlyVehicles.filter((v) =>
+              (v.junctions || []).includes("Vivekananda Sarani") ||
+              (v.junctions || []).includes("Junction A") ||
+              (v.cameras || []).some((c) => c.startsWith("junction_A"))
+            ).length})
           </button>
           <button
             type="button"
@@ -178,7 +166,11 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
               setPage(1);
             }}
           >
-            Kanyapur Link Road
+            Kanyapur Link Road ({plateOnlyVehicles.filter((v) =>
+              (v.junctions || []).includes("Kanyapur Link Road") ||
+              (v.junctions || []).includes("Junction B") ||
+              (v.cameras || []).some((c) => c.startsWith("junction_B"))
+            ).length})
           </button>
 
           {/* Vehicle Class Dropdown */}
@@ -235,7 +227,7 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
         <table className="registry-clean-table">
           <thead>
             <tr>
-              <th style={{ width: "160px" }}>License Plate / Target</th>
+              <th style={{ width: "160px" }}>License Plate</th>
               <th style={{ width: "90px" }}>Class</th>
               <th>Camera Transit Corridor</th>
               <th style={{ width: "120px", textAlign: "center" }}>Cross-Transit</th>
@@ -254,14 +246,14 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
               </tr>
             ) : (
               paginatedVehicles.map((v) => {
-                const isSelected = selectedVehicleId === v.global_vehicle_id;
+                const isSelected = selectedVehicleId === v.global_vehicle_id || selectedVehicleId === v.plate;
                 const cameras = v.cameras || v.camera_ids || [];
                 const isCrossCam = (v.camera_count || 1) > 1;
                 const isMultiJunc = (v.junction_count || 1) > 1;
 
                 return (
                   <tr
-                    key={v.global_vehicle_id}
+                    key={v.global_vehicle_id || v.plate}
                     className={isSelected ? "is-selected-row" : ""}
                     style={{ cursor: "pointer" }}
                     onClick={() => {
@@ -272,31 +264,9 @@ export function GlobalRegistry({ vehicles, onSelectVehicle, onOpenDossier, selec
                       }
                     }}
                   >
-                    {/* Target / Plate */}
+                    {/* License Plate */}
                     <td>
-                      {v.has_plate && v.plate ? (
-                        <div className="table-plate-pill font-mono">{v.plate}</div>
-                      ) : (
-                        <div className="table-gid-tag font-mono" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                          <span
-                            style={{
-                              fontSize: "9px",
-                              fontWeight: "800",
-                              letterSpacing: "0.04em",
-                              padding: "2px 5px",
-                              borderRadius: "3px",
-                              background: "rgba(107, 92, 80, 0.14)",
-                              color: "var(--text-muted)",
-                              border: "1px solid var(--border-default)",
-                            }}
-                          >
-                            TRACK ONLY
-                          </span>
-                          <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
-                            {v.global_vehicle_id}
-                          </span>
-                        </div>
-                      )}
+                      <div className="table-plate-pill font-mono">{v.plate}</div>
                     </td>
 
                     {/* Type */}
