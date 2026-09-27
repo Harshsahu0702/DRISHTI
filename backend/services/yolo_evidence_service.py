@@ -5,7 +5,10 @@ Runs real-time or on-demand Ultralytics YOLO inference across evidence CCTV clip
 extracting genuine vehicle bounding box trajectories and caching them for zero-latency API delivery.
 """
 
-import cv2
+try:
+    import cv2
+except Exception as _e:
+    cv2 = None
 import json
 import logging
 from pathlib import Path

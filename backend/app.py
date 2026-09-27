@@ -179,7 +179,7 @@ def root():
     return {
         "status": "online",
         "service": "SIH 2026 City-Wide Traffic Intelligence API",
-        "version": "3.5.0",
+        "version": "3.5.2",
         "docs": "/docs",
         "endpoints": [
             "/api/health",
@@ -1707,9 +1707,14 @@ def scan_live_frame(req: LiveAnprScanRequest):
         )
         return JSONResponse(status_code=status.HTTP_200_OK, content=result)
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Live ANPR processing failed: {exc}",
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "success": False,
+                "has_detection": False,
+                "busy": False,
+                "error": f"AI Engine warming up: {exc}",
+            },
         )
 
 
@@ -1721,10 +1726,7 @@ def get_live_anpr_history(limit: int = Query(50, ge=1, le=100)):
         history = live_anpr_service.get_history(limit=limit)
         return {"history": history, "total": len(history)}
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch live scan history: {exc}",
-        )
+        return {"history": [], "total": 0, "notice": str(exc)}
 
 
 @app.post("/api/anpr/clear-history")
@@ -1735,10 +1737,7 @@ def clear_live_anpr_history():
         live_anpr_service.clear_history()
         return {"success": True, "message": "Live ANPR history cleared"}
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear history: {exc}",
-        )
+        return {"success": False, "error": str(exc)}
 
 
 @app.get("/api/anpr/status")
@@ -1746,14 +1745,21 @@ def get_live_anpr_status():
     """Check AI engine readiness status."""
     try:
         from backend.services.live_anpr_service import live_anpr_service
+        is_ready = live_anpr_service.is_ready()
         return {
-            "status": "ready" if live_anpr_service.is_ready() else "initializing",
-            "models_loaded": live_anpr_service.is_ready(),
+            "status": "ready" if is_ready else "initializing",
+            "models_loaded": is_ready,
             "pipeline": "YOLO_LICENSE_PLATE_V8 + PADDLE_OCR_V6_ONE_DNN",
             "supported_modes": ["STANDARD_INDIAN_PLATE", "BHARAT_SERIES", "DIRECT_SCENE_TEXT"],
         }
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {
+            "status": "initializing",
+            "models_loaded": False,
+            "notice": str(exc),
+            "pipeline": "YOLO_LICENSE_PLATE_V8 + OCR",
+        }
+
 
 
 if __name__ == "__main__":

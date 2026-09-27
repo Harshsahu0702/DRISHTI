@@ -20,10 +20,21 @@ Features:
 
 import os
 import re
-import cv2
+import io
 import time
 import uuid
 import base64
+import threading
+import numpy as np
+from PIL import Image
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except Exception as _cv2_err:
+    print(f"[LiveANPR Notice] cv2 not available ({_cv2_err}). Using PIL fallback.")
+    CV2_AVAILABLE = False
+    cv2 = None
 import threading
 import numpy as np
 from pathlib import Path
@@ -100,8 +111,11 @@ class LiveANPRService:
                 print("[LiveANPR] PaddleOCR initialized successfully with multi-angle text orientation and stable CPU executor.")
 
                 # Warmup inference
-                dummy = np.full((120, 360, 3), 240, dtype=np.uint8)
-                cv2.putText(dummy, "MH 12 DE 1433", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+                if CV2_AVAILABLE and cv2 is not None:
+                    try:
+                        cv2.putText(dummy, "MH 12 DE 1433", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+                    except Exception:
+                        pass
                 if self.yolo_model:
                     self.yolo_model.predict(dummy, verbose=False)
                 if self.ocr_engine:
@@ -195,6 +209,8 @@ class LiveANPRService:
         """Apply CLAHE contrast stretching & bilateral denoising for high-accuracy OCR."""
         if crop is None or crop.size == 0:
             return crop
+        if not CV2_AVAILABLE or cv2 is None:
+            return crop
         try:
             h, w = crop.shape[:2]
             # Upscale if very small
@@ -258,13 +274,24 @@ class LiveANPRService:
                 image_data = image_data.split(",", 1)[1]
             try:
                 img_bytes = base64.b64decode(image_data)
-                nparr = np.frombuffer(img_bytes, np.uint8)
-                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if CV2_AVAILABLE and cv2 is not None:
+                    nparr = np.frombuffer(img_bytes, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is None:
+                    pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+                    frame = np.array(pil_img)[:, :, ::-1].copy()
             except Exception as e:
                 return {"success": False, "error": f"Failed to decode base64 image: {e}"}
         elif isinstance(image_data, bytes):
-            nparr = np.frombuffer(image_data, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            try:
+                if CV2_AVAILABLE and cv2 is not None:
+                    nparr = np.frombuffer(image_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is None:
+                    pil_img = Image.open(io.BytesIO(image_data)).convert("RGB")
+                    frame = np.array(pil_img)[:, :, ::-1].copy()
+            except Exception as e:
+                return {"success": False, "error": f"Failed to decode image bytes: {e}"}
         elif isinstance(image_data, np.ndarray):
             frame = image_data.copy()
 
@@ -273,7 +300,7 @@ class LiveANPRService:
 
         # Optional horizontal mirror flip (often needed if user webcam stream is un-mirrored)
         if mirror_flip:
-            frame = cv2.flip(frame, 1)
+            frame = cv2.flip(frame, 1) if (CV2_AVAILABLE and cv2 is not None) else np.fliplr(frame).copy()
 
         frame_h, frame_w = frame.shape[:2]
 
@@ -315,8 +342,8 @@ class LiveANPRService:
                     continue
 
                 crop_enhanced = self._enhance_crop(crop)
-                # Try normal crop first; if not a valid plate, try flipped crop (solves webcam mirror reflection in ~20ms)
-                crops_to_try = [(crop_enhanced, False), (cv2.flip(crop_enhanced, 1), True)]
+                flipped_crop = cv2.flip(crop_enhanced, 1) if (CV2_AVAILABLE and cv2 is not None) else np.fliplr(crop_enhanced).copy()
+                crops_to_try = [(crop_enhanced, False), (flipped_crop, True)]
                 found_valid_in_crop = False
 
                 for test_crop, _ in crops_to_try:
@@ -388,7 +415,10 @@ class LiveANPRService:
                     scale_factor = 1.0
                     if frame_w > 640:
                         scale_factor = 640.0 / frame_w
-                        scan_img = cv2.resize(scan_frame, (640, int(frame_h * scale_factor)))
+                        if CV2_AVAILABLE and cv2 is not None:
+                            scan_img = cv2.resize(scan_frame, (640, int(frame_h * scale_factor)))
+                        else:
+                            scan_img = np.array(Image.fromarray(scan_frame).resize((640, int(frame_h * scale_factor))))
 
                     scene_ocr = self.ocr_engine.predict(scan_img)
                     for item in scene_ocr:
