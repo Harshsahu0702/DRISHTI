@@ -143,6 +143,19 @@ class CopilotQueryRequest(BaseModel):
     context: Optional[Dict[str, Any]] = Field(default=None, description="Optional UI context")
 
 
+class LiveAnprScanRequest(BaseModel):
+    image: str = Field(..., description="Base64 encoded webcam image frame or data URL")
+    min_confidence: Optional[float] = Field(default=0.25, description="Confidence threshold")
+    mirror: Optional[bool] = Field(default=False, description="Horizontal mirror flip")
+
+
+class LiveAnprLogRequest(BaseModel):
+    plate: str = Field(..., min_length=2, description="Recognized plate or text string")
+    confidence: Optional[float] = Field(default=0.95, description="OCR confidence score")
+    camera_id: Optional[str] = Field(default="laptop_webcam_01", description="Camera source identifier")
+    notes: Optional[str] = Field(default="Live laptop camera capture", description="Operational notes")
+
+
 # ============================================================
 # ROOT / HEALTH
 # ============================================================
@@ -1660,10 +1673,74 @@ def copilot_suggestions():
             detail=f"Failed to fetch copilot suggestions: {exc}",
         )
 
+# ============================================================
+# LIVE LAPTOP WEBCAM ANPR & OPTICAL TEXT RECOGNITION
+# ============================================================
 
-# ============================================================
-# LOCAL DEVELOPMENT ENTRY POINT
-# ============================================================
+@app.post("/api/anpr/scan-frame")
+def scan_live_frame(req: LiveAnprScanRequest):
+    """
+    Real-Time Live Laptop Webcam ANPR & Scene Text OCR Scanner.
+    Processes a video frame snapshot from browser camera using YOLO plate detection + PaddleOCR.
+    Enriches with Indian RTO plate formatting, VAHAN RC data, and DRISHTI Blacklist checks.
+    """
+    try:
+        from backend.services.live_anpr_service import live_anpr_service
+        result = live_anpr_service.process_frame(
+            image_data=req.image,
+            min_confidence=req.min_confidence or 0.25,
+            mirror_flip=req.mirror or False,
+        )
+        return JSONResponse(status_code=status.HTTP_200_OK, content=result)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Live ANPR processing failed: {exc}",
+        )
+
+
+@app.get("/api/anpr/live-history")
+def get_live_anpr_history(limit: int = Query(50, ge=1, le=100)):
+    """Retrieve audit history of recent live camera plate & text scans."""
+    try:
+        from backend.services.live_anpr_service import live_anpr_service
+        history = live_anpr_service.get_history(limit=limit)
+        return {"history": history, "total": len(history)}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch live scan history: {exc}",
+        )
+
+
+@app.post("/api/anpr/clear-history")
+def clear_live_anpr_history():
+    """Clear session scan history."""
+    try:
+        from backend.services.live_anpr_service import live_anpr_service
+        live_anpr_service.clear_history()
+        return {"success": True, "message": "Live ANPR history cleared"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear history: {exc}",
+        )
+
+
+@app.get("/api/anpr/status")
+def get_live_anpr_status():
+    """Check AI engine readiness status."""
+    try:
+        from backend.services.live_anpr_service import live_anpr_service
+        return {
+            "status": "ready" if live_anpr_service.is_ready() else "initializing",
+            "models_loaded": live_anpr_service.is_ready(),
+            "pipeline": "YOLO_LICENSE_PLATE_V8 + PADDLE_OCR_V6_ONE_DNN",
+            "supported_modes": ["STANDARD_INDIAN_PLATE", "BHARAT_SERIES", "DIRECT_SCENE_TEXT"],
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
 
 if __name__ == "__main__":
     import uvicorn

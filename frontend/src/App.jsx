@@ -14,6 +14,7 @@ import { SystemValidationPage } from "./components/SystemValidationPage";
 import { EvidencePlaybackModal } from "./components/EvidencePlaybackModal";
 import { FullMapModal } from "./components/FullMapModal";
 import { DrishtiGptCopilot } from "./components/DrishtiGptCopilot";
+import { LiveWebcamAnpr } from "./components/LiveWebcamAnpr";
 import {
   api,
   normalizeCameraId,
@@ -574,7 +575,7 @@ export default function App() {
       />
 
       {/* 2. MAIN OPERATIONS BODY */}
-      <main className="command-center-body">
+      <main className={`command-center-body ${activeTab === "live_anpr" ? "live-anpr-tab-active" : ""}`}>
         {activeTab === "analytics" ? (
           /* DEDICATED TRAFFIC MOBILITY & FLOW ANALYTICS PAGE */
           <TrafficAnalyticsPage
@@ -587,6 +588,21 @@ export default function App() {
         ) : activeTab === "validation" ? (
           <SystemValidationPage
             onBackToSurveillance={() => setActiveTab("surveillance")}
+          />
+        ) : activeTab === "live_anpr" ? (
+          <LiveWebcamAnpr
+            onSelectVehicle={(veh) => {
+              handleSelectVehicle(veh);
+              setActiveTab("surveillance");
+            }}
+            onOpenAddBlacklist={(plate) => {
+              setIsAddBlacklistModalOpen(true);
+            }}
+            onTraceVehicle={(plate) => {
+              handleTraceVehicleJourneyOnMap(plate);
+              setActiveTab("surveillance");
+            }}
+            showToast={showToast}
           />
         ) : (
           /* SURVEILLANCE & RE-ID COMMAND CENTER */
@@ -621,6 +637,8 @@ export default function App() {
                 analytics={analytics}
                 onPlayEvent={handlePlayEvent}
                 onOpenFullMap={() => setIsFullMapOpen(true)}
+                onSelectVehicle={handleSelectVehicle}
+                vehicles={vehicles}
               />
             </div>
 
@@ -692,6 +710,9 @@ export default function App() {
         selectedCameraId={selectedCameraId}
         onCameraSelect={handleCameraSelect}
         onPlayEvent={handlePlayEvent}
+        onSelectVehicle={handleSelectVehicle}
+        vehicles={vehicles}
+        analytics={analytics}
       />
 
       {/* DRISHTI-GPT AI FORENSIC COPILOT HUD */}

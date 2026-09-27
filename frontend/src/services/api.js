@@ -583,6 +583,31 @@ export const api = {
   },
 
   /* -------------------------------------------------------
+     LIVE WEBCAM ANPR & OPTICAL TEXT RECOGNITION
+  ------------------------------------------------------- */
+  scanLiveFrame: async (payload) => {
+    return await request("/api/anpr/scan-frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getLiveAnprHistory: async (limit = 50) => {
+    return await request(`/api/anpr/live-history?limit=${limit}`);
+  },
+
+  clearLiveAnprHistory: async () => {
+    return await request("/api/anpr/clear-history", {
+      method: "POST",
+    });
+  },
+
+  getLiveAnprStatus: async () => {
+    return await request("/api/anpr/status");
+  },
+
+  /* -------------------------------------------------------
      MYSQL BLACKLIST CRUD (PHASE 5, 6, 7)
   ------------------------------------------------------- */
 

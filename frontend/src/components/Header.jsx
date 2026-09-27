@@ -1,5 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Shield, BarChart3, ShieldAlert, PowerOff, X, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  Shield,
+  BarChart3,
+  ShieldAlert,
+  PowerOff,
+  X,
+  AlertTriangle,
+  Camera,
+  Plus,
+  Radio,
+  Sparkles,
+} from "lucide-react";
 import { DrishtiEyeLogo } from "./DrishtiEyeLogo";
 
 export function Header({
@@ -44,9 +55,9 @@ export function Header({
         role="button"
         tabIndex={0}
       >
-        {/* Futuristic Eye Symbol */}
+        {/* Futuristic Eye Symbol with Ambient Glow */}
         <div className="header-drishti-logo-slot">
-          <DrishtiEyeLogo size={42} animated={true} />
+          <DrishtiEyeLogo size={40} animated={true} />
         </div>
 
         <div className="brand-text-block">
@@ -59,21 +70,21 @@ export function Header({
             )}
           </div>
           <div className="brand-sub-descriptor">
-            City-Wide AI Vehicle Tracking & Traffic Monitoring
+            City-Wide AI Vehicle Surveillance & Mobility Intelligence
           </div>
         </div>
       </div>
 
-      {/* CENTER: Navigation Page Switcher */}
+      {/* CENTER: Navigation Page Switcher (Live ANPR placed on the right) */}
       {onSelectTab && (
         <nav className="header-nav-switcher">
           <button
             type="button"
             className={`nav-tab-btn ${activeTab === "surveillance" ? "active" : ""}`}
             onClick={() => onSelectTab("surveillance")}
-            title="Live Cameras, Vehicle Search & Tracking"
+            title="City CCTV Feeds, Vehicle Search & Tracking"
           >
-            <Shield size={15} />
+            <Shield size={16} className="nav-icon" />
             <span>Live Cameras & Tracking</span>
           </button>
 
@@ -83,14 +94,23 @@ export function Header({
             onClick={() => onSelectTab("analytics")}
             title="City-Wide Traffic Analytics & Congestion Reports"
           >
-            <BarChart3 size={15} />
+            <BarChart3 size={16} className="nav-icon" />
             <span>Traffic Analytics</span>
-            <span className="nav-tab-badge">LIVE DATA</span>
+          </button>
+
+          <button
+            type="button"
+            className={`nav-tab-btn ${activeTab === "live_anpr" ? "active" : ""}`}
+            onClick={() => onSelectTab("live_anpr")}
+            title="Real-Time Camera ANPR & Optical Text Scanner"
+          >
+            <Camera size={16} className="nav-icon" />
+            <span>Live ANPR</span>
           </button>
         </nav>
       )}
 
-      {/* RIGHT: Action Button & Constant Alert */}
+      {/* RIGHT: Alert Beacon & Blacklist Action */}
       <div className="header-status-strip">
         {/* CONSTANT ALERT ICON (SHOWN ONLY WHEN ACTIVATED BLACKLISTED VEHICLE IS DETECTED) */}
         {hasActiveAlerts && (
@@ -215,11 +235,13 @@ export function Header({
         {/* Prominent Action Button for Blacklist */}
         {onOpenAddBlacklist && (
           <button
+            type="button"
             className="btn-header-add-blacklist"
             onClick={onOpenAddBlacklist}
             title="Register target plate to MySQL blacklist"
           >
-            <span className="btn-add-plus">+</span> Add Blacklisted Vehicle
+            <Plus size={15} strokeWidth={2.5} className="btn-add-icon" />
+            <span>Add Blacklisted Vehicle</span>
           </button>
         )}
       </div>

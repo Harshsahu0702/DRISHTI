@@ -80,7 +80,7 @@ def start_backend():
         return None
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "backend.app:app", "--host", "127.0.0.1", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "backend.app:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
         cwd=str(ROOT_DIR),
     )
     time.sleep(2)

@@ -41,6 +41,29 @@ export const CameraGrid = forwardRef(function CameraGrid(
 
   // Judge / Live Custom Stream Link State
   const [showStreamModal, setShowStreamModal] = useState(false);
+  const [liveClockTime, setLiveClockTime] = useState(() =>
+    new Date().toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveClockTime(
+        new Date().toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        })
+      );
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [customStreamUrls, setCustomStreamUrls] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("drishti_custom_camera_streams") || "{}");
@@ -318,7 +341,39 @@ export const CameraGrid = forwardRef(function CameraGrid(
           <div className="section-eyebrow">Synchronized CCTV Feeds</div>
 
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Running Live IST Surveillance Clock */}
+          <div
+            className="camera-live-clock font-mono"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "7px",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              background: "#FFFFFF",
+              border: "1px solid rgba(180, 135, 90, 0.28)",
+              color: "#1E293B",
+              fontSize: "12px",
+              fontWeight: 700,
+              boxShadow: "0 1px 3px rgba(45, 30, 15, 0.05)",
+              letterSpacing: "0.03em",
+            }}
+            title="Real-Time Synchronized CCTV Clock (IST)"
+          >
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                background: "#10B981",
+                boxShadow: "0 0 6px #10B981",
+                display: "inline-block",
+              }}
+            />
+            <span>{liveClockTime} IST</span>
+          </div>
+
           <button
             type="button"
             className="btn-configure-stream font-mono"
