@@ -57,3 +57,6 @@ pymysql>=1.1.0
 cryptography>=41.0.0
 imageio-ffmpeg>=0.4.9
 python-dotenv>=1.0.0
+paddlepaddle>=3.0.0b1
+paddleocr>=2.8.0
+

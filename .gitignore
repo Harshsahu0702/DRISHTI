@@ -66,6 +66,8 @@ desktop.ini
 models/*.pt
 models/*.pth
 models/*.onnx
+!models/license_plate.pt
+!yolov8n.pt
 
 # YOLO & Inference output directories (Runs, Detections, Predictions)
 runs/
