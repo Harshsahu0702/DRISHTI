@@ -111,6 +111,7 @@ class LiveANPRService:
                 print("[LiveANPR] PaddleOCR initialized successfully with multi-angle text orientation and stable CPU executor.")
 
                 # Warmup inference
+                dummy = np.full((120, 360, 3), 240, dtype=np.uint8)
                 if CV2_AVAILABLE and cv2 is not None:
                     try:
                         cv2.putText(dummy, "MH 12 DE 1433", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
@@ -491,10 +492,9 @@ class LiveANPRService:
 
         # 2. Dual-Orientation Auto-Fallback:
         # If no valid vehicle plate was detected in primary orientation, automatically test the flipped orientation.
-        # This completely eliminates errors from browser mirror mode vs camera sensor orientation.
         has_plate = any(d.get("is_vehicle_plate") for d in detections)
         if not has_plate:
-            flipped_frame = cv2.flip(frame, 1)
+            flipped_frame = cv2.flip(frame, 1) if (CV2_AVAILABLE and cv2 is not None) else np.fliplr(frame).copy()
             flipped_dets = _scan_single_orientation(flipped_frame, is_flipped_coords=True)
             flipped_has_plate = any(d.get("is_vehicle_plate") for d in flipped_dets)
 
@@ -606,9 +606,15 @@ class LiveANPRService:
             crop = frame[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)]
             thumb_b64 = None
             if crop.size > 0:
-                thumb = cv2.resize(crop, (160, 60))
-                _, buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 75])
-                thumb_b64 = base64.b64encode(buf).decode("utf-8")
+                if CV2_AVAILABLE and cv2 is not None:
+                    thumb = cv2.resize(crop, (160, 60))
+                    _, buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                    thumb_b64 = base64.b64encode(buf).decode("utf-8")
+                else:
+                    pil_thumb = Image.fromarray(crop).resize((160, 60))
+                    bio = io.BytesIO()
+                    pil_thumb.save(bio, format="JPEG", quality=75)
+                    thumb_b64 = base64.b64encode(bio.getvalue()).decode("utf-8")
 
             event = {
                 "scan_id": f"scan_{uuid.uuid4().hex[:8]}",
