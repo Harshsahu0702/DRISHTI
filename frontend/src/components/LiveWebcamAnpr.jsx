@@ -79,6 +79,52 @@ export function LiveWebcamAnpr({
   const [modelsReady, setModelsReady] = useState(false);
   const [isBackendOnline, setIsBackendOnline] = useState(null);
   const [backendError, setBackendError] = useState(null);
+  const [customBackendUrl, setCustomBackendUrl] = useState(() => (typeof api.getApiBase === "function" ? api.getApiBase() : "") || "");
+  const [isConnectingBackend, setIsConnectingBackend] = useState(false);
+  const [backendSuccessMsg, setBackendSuccessMsg] = useState(null);
+
+  const handleConnectBackend = async () => {
+    if (!customBackendUrl.trim()) return;
+    setIsConnectingBackend(true);
+    setBackendError(null);
+    setBackendSuccessMsg(null);
+    try {
+      if (typeof api.setApiBase === "function") {
+        api.setApiBase(customBackendUrl.trim());
+      }
+      const res = await api.getLiveAnprStatus();
+      setIsBackendOnline(true);
+      if (res?.models_loaded) {
+        setModelsReady(true);
+        setEngineStatus("AI Engines Ready (YOLOv8 + PP-OCRv6)");
+      } else {
+        setEngineStatus("AI Warming Up (Loading YOLO + PaddleOCR)...");
+      }
+      setBackendSuccessMsg(`Successfully connected to Railway Backend (${typeof api.getApiBase === "function" ? api.getApiBase() : customBackendUrl})`);
+      setTimeout(() => setBackendSuccessMsg(null), 5000);
+    } catch (err) {
+      setIsBackendOnline(false);
+      setBackendError(`Connection failed: Unable to reach ${typeof api.getApiBase === "function" ? api.getApiBase() : customBackendUrl}. Make sure Railway deployment is active.`);
+    } finally {
+      setIsConnectingBackend(false);
+    }
+  };
+
+  const handleResetBackend = async () => {
+    if (typeof api.setApiBase === "function") {
+      api.setApiBase("");
+      setCustomBackendUrl(api.getApiBase() || "");
+    }
+    setBackendSuccessMsg("Reset backend URL to default.");
+    setTimeout(() => setBackendSuccessMsg(null), 3000);
+    try {
+      await api.getLiveAnprStatus();
+      setIsBackendOnline(true);
+      setBackendError(null);
+    } catch (_) {
+      setIsBackendOnline(false);
+    }
+  };
 
   // FPS & Latency
   const [fps, setFps] = useState(0);
@@ -151,8 +197,9 @@ export function LiveWebcamAnpr({
         .catch((err) => {
           setIsBackendOnline(false);
           setModelsReady(false);
-          setEngineStatus("AI Backend Offline (Port 8000)");
-          setBackendError("Cannot reach Python backend at http://127.0.0.1:8000. Start backend with `python run_drishti_master.py`.");
+          const currentUrl = (typeof api.getApiBase === "function" ? api.getApiBase() : "") || "http://127.0.0.1:8000";
+          setEngineStatus("AI Backend Offline");
+          setBackendError(`Cannot reach Python backend at ${currentUrl}. Connect your Railway backend URL below.`);
         });
     };
     checkEngine();
@@ -444,8 +491,8 @@ export function LiveWebcamAnpr({
       }
     } catch (err) {
       console.warn("[Live Scan Frame]", err);
-      setIsBackendOnline(false);
-      setBackendError("Python AI backend offline at http://127.0.0.1:8000. Start backend server to process camera frames.");
+      const currentUrl = (typeof api.getApiBase === "function" ? api.getApiBase() : "") || "http://127.0.0.1:8000";
+      setBackendError(`Python AI backend offline at ${currentUrl}. Connect your Railway backend URL below.`);
     } finally {
       isProcessingRef.current = false;
       setIsProcessingFrame(false);
@@ -651,11 +698,114 @@ export function LiveWebcamAnpr({
 
   return (
     <div className="live-anpr-container font-sans">
-      {/* BACKEND ERROR BANNER */}
+      {/* BACKEND ERROR / RAILWAY CONFIGURATION BANNER */}
       {backendError && (
-        <div className="live-anpr-error-banner" style={{ background: "rgba(239, 68, 68, 0.12)", borderColor: "rgba(239, 68, 68, 0.35)", color: "#FCA5A5", marginBottom: "1rem" }}>
-          <AlertTriangle size={18} style={{ color: "#EF4444", flexShrink: 0 }} />
-          <span>{backendError}</span>
+        <div
+          className="live-anpr-error-banner"
+          style={{
+            background: "rgba(239, 68, 68, 0.12)",
+            borderColor: "rgba(239, 68, 68, 0.4)",
+            color: "#FCA5A5",
+            marginBottom: "1rem",
+            padding: "12px 16px",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <AlertTriangle size={18} style={{ color: "#EF4444", flexShrink: 0 }} />
+            <span style={{ fontSize: "13px", fontWeight: 500 }}>{backendError}</span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexWrap: "wrap",
+              background: "rgba(0, 0, 0, 0.35)",
+              padding: "8px 12px",
+              borderRadius: "6px",
+            }}
+          >
+            <span style={{ fontSize: "12px", color: "#D1D5DB", whiteSpace: "nowrap", fontWeight: 600 }}>
+              Railway Backend URL:
+            </span>
+            <input
+              type="text"
+              placeholder="e.g. https://drishti-production.up.railway.app"
+              value={customBackendUrl}
+              onChange={(e) => setCustomBackendUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleConnectBackend()}
+              style={{
+                flex: 1,
+                minWidth: "260px",
+                padding: "6px 12px",
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
+                borderRadius: "5px",
+                color: "#F9FAFB",
+                fontSize: "12px",
+                fontFamily: "monospace",
+                outline: "none",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleConnectBackend}
+              disabled={isConnectingBackend}
+              style={{
+                padding: "6px 16px",
+                background: "#059669",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "5px",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {isConnectingBackend ? "Connecting..." : "Connect Railway"}
+            </button>
+            {Boolean(typeof window !== "undefined" && localStorage.getItem("DRISHTI_BACKEND_URL")) && (
+              <button
+                type="button"
+                onClick={handleResetBackend}
+                style={{
+                  padding: "6px 10px",
+                  background: "transparent",
+                  color: "#9CA3AF",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: "5px",
+                  fontSize: "11px",
+                  cursor: "pointer",
+                }}
+              >
+                Reset Default
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {backendSuccessMsg && (
+        <div
+          style={{
+            background: "rgba(16, 185, 129, 0.15)",
+            border: "1px solid rgba(16, 185, 129, 0.4)",
+            color: "#6EE7B7",
+            padding: "8px 14px",
+            borderRadius: "6px",
+            marginBottom: "1rem",
+            fontSize: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span>✓ {backendSuccessMsg}</span>
         </div>
       )}
 

@@ -6,19 +6,68 @@
  * Local JSON fallback is used only when backend is offline.
  */
 
-export const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== "undefined" && window.location.hostname
-    ? `http://${window.location.hostname}:8000`
-    : "http://127.0.0.1:8000")
-).replace(/\/+$/, "");
+/* =========================================================
+   BACKEND URL CONFIGURATION
+========================================================= */
+
+/**
+ * Resolves the active backend API base URL dynamically.
+ * Priority:
+ * 1. Runtime override saved in browser localStorage ("DRISHTI_BACKEND_URL")
+ * 2. Build-time Vite environment variable (import.meta.env.VITE_API_BASE_URL)
+ * 3. Localhost development (localhost or 127.0.0.1 -> :8000)
+ * 4. Production fallback: "" (relative request)
+ */
+export function getApiBase() {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("DRISHTI_BACKEND_URL");
+      if (stored && stored.trim()) {
+        return stored.trim().replace(/\/+$/, "");
+      }
+    } catch (_) {}
+  }
+
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && typeof envUrl === "string" && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+
+  if (typeof window !== "undefined" && window.location) {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") {
+      return `http://${host}:8000`;
+    }
+  }
+
+  return "";
+}
+
+export function setApiBase(url) {
+  if (typeof window !== "undefined") {
+    try {
+      if (!url || !url.trim()) {
+        localStorage.removeItem("DRISHTI_BACKEND_URL");
+      } else {
+        let clean = url.trim().replace(/\/+$/, "");
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+          clean = "https://" + clean;
+        }
+        localStorage.setItem("DRISHTI_BACKEND_URL", clean);
+      }
+    } catch (_) {}
+  }
+}
+
+export const API_BASE = getApiBase();
 
 /* =========================================================
    BACKEND REQUEST
 ========================================================= */
 
 async function request(path, options = {}) {
-  const url = `${API_BASE}${path}`;
+  const base = getApiBase();
+  const url = base ? `${base}${path}` : path;
   const response = await fetch(url, options);
 
   if (!response.ok) {
@@ -799,14 +848,16 @@ export const api = {
      PLATE IMAGE
   ------------------------------------------------------- */
 
-  getPlateImageUrl: (imageName) =>
-    imageName
-      ? `${API_BASE}/api/plates/${encodeURIComponent(
+  getPlateImageUrl: (imageName) => {
+    const base = getApiBase();
+    return imageName
+      ? `${base}/api/plates/${encodeURIComponent(
           typeof imageName === "string" && imageName.includes("/")
             ? imageName.split("/").pop()
             : imageName
         )}`
-      : null,
+      : null;
+  },
 
   /* -------------------------------------------------------
      CAMERA VIDEO & EVIDENCE
@@ -814,13 +865,15 @@ export const api = {
 
   getCameraVideoUrl: (cameraId, quality = "high") => {
     const norm = normalizeCameraId(cameraId);
-    return `${API_BASE}/api/cameras/${encodeURIComponent(norm)}/video${quality !== "high" ? `?quality=${quality}` : ""}`;
+    const base = getApiBase();
+    return `${base}/api/cameras/${encodeURIComponent(norm)}/video${quality !== "high" ? `?quality=${quality}` : ""}`;
   },
 
   getEvidenceClipUrl: (cameraId, timestamp, preRoll = 5, duration = 15) => {
     const norm = normalizeCameraId(cameraId);
     const t = Math.max(0, Math.round(Number(timestamp) || 0));
-    return `${API_BASE}/api/cameras/${encodeURIComponent(norm)}/evidence?timestamp=${t}&pre_roll=${preRoll}&duration=${duration}`;
+    const base = getApiBase();
+    return `${base}/api/cameras/${encodeURIComponent(norm)}/evidence?timestamp=${t}&pre_roll=${preRoll}&duration=${duration}`;
   },
 
   getEvidenceYoloTracks: (cameraId, timestamp, plate, preRoll = 5, duration = 15) => {
@@ -836,8 +889,10 @@ export const api = {
      MAP BACKGROUND
   ------------------------------------------------------- */
 
-  getMapBackgroundUrl: () =>
-    `${API_BASE}/api/map/background`,
+  getMapBackgroundUrl: () => {
+    const base = getApiBase();
+    return `${base}/api/map/background`;
+  },
 
   /* -------------------------------------------------------
      DASHBOARD (consolidated endpoint)
@@ -1118,4 +1173,7 @@ export function getCanonicalJunctionName(juncId, fallback) {
   return fallback || juncId || "Traffic Junction";
 }
 
-console.info("[API] Backend-first API client initialized. Base:", API_BASE);
+api.getApiBase = getApiBase;
+api.setApiBase = setApiBase;
+
+console.info("[API] Backend-first API client initialized. Base:", getApiBase() || "(proxy/relative)");
