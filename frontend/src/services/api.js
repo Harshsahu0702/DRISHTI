@@ -40,7 +40,8 @@ export function getApiBase() {
     }
   }
 
-  return "";
+  // Production default connected to Railway cloud backend
+  return "https://drishti-production-8365.up.railway.app";
 }
 
 export function setApiBase(url) {
