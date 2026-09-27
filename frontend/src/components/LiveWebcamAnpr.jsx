@@ -76,6 +76,7 @@ export function LiveWebcamAnpr({
   const [lastDetectionTime, setLastDetectionTime] = useState(null);
   const [recentDetections, setRecentDetections] = useState([]);
   const [engineStatus, setEngineStatus] = useState("Checking AI Engine...");
+  const [modelsReady, setModelsReady] = useState(false);
   const [isBackendOnline, setIsBackendOnline] = useState(null);
   const [backendError, setBackendError] = useState(null);
 
@@ -131,18 +132,31 @@ export function LiveWebcamAnpr({
     }
     getDevices();
 
-    // Check engine status
-    api.getLiveAnprStatus()
-      .then((res) => {
-        setIsBackendOnline(true);
-        setBackendError(null);
-        setEngineStatus(res.models_loaded ? "AI Engines Ready (YOLOv8 + PP-OCRv6)" : "AI Warming Up...");
-      })
-      .catch((err) => {
-        setIsBackendOnline(false);
-        setEngineStatus("AI Backend Offline (Port 8000)");
-        setBackendError("Cannot reach Python backend at http://127.0.0.1:8000. Start backend with `python -m uvicorn backend.app:app`.");
-      });
+    // Check engine status with auto-polling until AI models are fully loaded in memory
+    let statusTimer = null;
+    const checkEngine = () => {
+      api.getLiveAnprStatus()
+        .then((res) => {
+          setIsBackendOnline(true);
+          setBackendError(null);
+          if (res.models_loaded) {
+            setModelsReady(true);
+            setEngineStatus("AI Engines Ready (YOLOv8 + PP-OCRv6)");
+            if (statusTimer) clearInterval(statusTimer);
+          } else {
+            setModelsReady(false);
+            setEngineStatus("AI Warming Up (Loading YOLO + PaddleOCR)...");
+          }
+        })
+        .catch((err) => {
+          setIsBackendOnline(false);
+          setModelsReady(false);
+          setEngineStatus("AI Backend Offline (Port 8000)");
+          setBackendError("Cannot reach Python backend at http://127.0.0.1:8000. Start backend with `python run_drishti_master.py`.");
+        });
+    };
+    checkEngine();
+    statusTimer = setInterval(checkEngine, 2500);
 
     // Load initial scan history (filtered to only genuine vehicle plates & clean text)
     api.getLiveAnprHistory(20)
@@ -372,10 +386,11 @@ export function LiveWebcamAnpr({
         mirror: false,
       });
 
-      const inferenceMs = Math.round(performance.now() - t0);
+      const inferenceMs = res?.inference_time_ms ? Math.round(res.inference_time_ms) : Math.round(performance.now() - t0);
       setLastInferenceTime(inferenceMs);
       setIsBackendOnline(true);
       setBackendError(null);
+      setModelsReady(true);
 
       if (res && res.success) {
         if (res.busy) {
@@ -673,8 +688,11 @@ export function LiveWebcamAnpr({
                   {isCameraActive ? "LAPTOP WEBCAM ACTIVE" : "CAMERA DISCONNECTED"}
                 </span>
                 {isCameraActive && (
-                  <span className="font-mono text-xs" style={{ marginLeft: "8px", opacity: 0.75, color: "var(--text-muted)" }}>
-                    • {fps} FPS {lastInferenceTime ? `• ${lastInferenceTime}ms` : ""}
+                  <span className="font-mono text-xs" style={{ marginLeft: "8px", opacity: 0.85, color: "var(--text-muted)" }}>
+                    • {fps} FPS {lastInferenceTime ? `• ${lastInferenceTime > 4000 ? `${(lastInferenceTime / 1000).toFixed(1)}s (Cold Start)` : `${lastInferenceTime}ms`}` : ""}
+                    {!modelsReady && isBackendOnline && (
+                      <span style={{ marginLeft: "8px", color: "#F59E0B", fontWeight: 600 }}>• Warming Up AI Models...</span>
+                    )}
                   </span>
                 )}
               </div>

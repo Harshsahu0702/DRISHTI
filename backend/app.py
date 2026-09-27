@@ -106,6 +106,19 @@ def on_startup():
     except Exception as e:
         print(f"[Startup Database Notice] {e}")
 
+    # Pre-warm Live ANPR AI models (YOLO + PaddleOCR) in background daemon thread so they are ready before user opens camera
+    try:
+        import threading
+        def _prewarm_anpr():
+            try:
+                from backend.services.live_anpr_service import live_anpr_service
+                print("[Startup] Pre-warming Live ANPR AI Models in background...")
+            except Exception as anpr_err:
+                print(f"[Startup ANPR Warning] {anpr_err}")
+        threading.Thread(target=_prewarm_anpr, daemon=True).start()
+    except Exception as e:
+        print(f"[Startup Prewarm Notice] {e}")
+
 
 # ============================================================
 # DATA MODELS
