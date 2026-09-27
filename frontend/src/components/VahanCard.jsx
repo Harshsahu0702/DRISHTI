@@ -103,63 +103,65 @@ export function VahanCard({ vahanData, defaultExpanded = false }) {
         </div>
       </div>
 
-      {/* Primary Highlights Row (Always Visible) */}
-      <div
-        style={{
-          padding: "10px 14px",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: "10px",
-          background: "#FFFFFF",
-          borderBottom: isExpanded ? "1px solid #E2E8F0" : "none",
-          fontSize: "11px",
-        }}
-      >
-        <div>
-          <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>REGISTERED OWNER</div>
-          <div style={{ fontWeight: 800, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
-            <User size={12} color="#0284C7" />
-            {vahanData.owner_name}
-          </div>
-        </div>
-
-        <div>
-          <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>MAKER & MODEL</div>
-          <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Car size={12} color="#D97706" />
-            {vahanData.maker} {vahanData.model}
-          </div>
-        </div>
-
-        <div>
-          <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>REGISTERING RTO</div>
-          <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Building2 size={12} color="#64748B" />
-            {vahanData.rto_office}
-          </div>
-        </div>
-
-        <div>
-          <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>FUEL / EMISSION</div>
-          <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
-            <Fuel size={12} color="#10B981" />
-            {vahanData.fuel_type} • BS-VI
-          </div>
-        </div>
-      </div>
-
-      {/* Expandable Extended Legal Specs */}
+      {/* Expandable Details Container: ALL details are collapsed by default */}
       {isExpanded && (
-        <div
-          style={{
-            padding: "12px 14px",
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: "12px",
-            background: "#F8FAFC",
-            fontSize: "10.5px",
-          }}
-        >
+        <div className="vahan-card-body">
+          {/* Primary Highlights Row */}
+          <div
+            style={{
+              padding: "10px 14px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "10px",
+              background: "#FFFFFF",
+              borderBottom: "1px solid #E2E8F0",
+              fontSize: "11px",
+            }}
+          >
+            <div>
+              <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>REGISTERED OWNER</div>
+              <div style={{ fontWeight: 800, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <User size={12} color="#0284C7" />
+                {vahanData.owner_name}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>MAKER & MODEL</div>
+              <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <Car size={12} color="#D97706" />
+                {vahanData.maker} {vahanData.model}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>REGISTERING RTO</div>
+              <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <Building2 size={12} color="#64748B" />
+                {vahanData.rto_office}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ color: "#64748B", fontSize: "10px", fontWeight: 600 }}>FUEL / EMISSION</div>
+              <div style={{ fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <Fuel size={12} color="#10B981" />
+                {vahanData.fuel_type} • BS-VI
+              </div>
+            </div>
+          </div>
+
+          {/* Extended Legal Specs */}
+          <div
+            style={{
+              padding: "12px 14px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: "12px",
+              background: "#F8FAFC",
+              fontSize: "10.5px",
+            }}
+          >
           <div>
             <div style={{ color: "#64748B", fontWeight: 600 }}>Registration Date</div>
             <div className="font-mono" style={{ fontWeight: 700, color: "#1E293B", marginTop: "2px" }}>
@@ -218,6 +220,7 @@ export function VahanCard({ vahanData, defaultExpanded = false }) {
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   );

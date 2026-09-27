@@ -580,7 +580,7 @@ export function VehicleSearch({
               Connecting to MoRTH VAHAN 4.0 National Registry...
             </div>
           )}
-          <VahanCard vahanData={effectiveVahan} defaultExpanded={true} />
+          <VahanCard vahanData={effectiveVahan} defaultExpanded={false} />
 
           {/* Camera Journey Stepper inside Search Result */}
           {Array.isArray(activeVehicle.trajectory) && activeVehicle.trajectory.length > 0 && (

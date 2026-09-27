@@ -572,7 +572,7 @@ export function VehicleDetailModal({
           </div>
 
           {/* VAHAN 4.0 NATIONAL RC DETAILS WIDGET */}
-          <VahanCard vahanData={vahanData || vehicle.vahan} defaultExpanded={true} />
+          <VahanCard vahanData={vahanData || vehicle.vahan} defaultExpanded={false} />
         </div>
       </div>
 

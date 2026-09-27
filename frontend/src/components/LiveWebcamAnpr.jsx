@@ -55,7 +55,7 @@ export function LiveWebcamAnpr({
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraDevices, setCameraDevices] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
-  const [isMirror, setIsMirror] = useState(true);
+  const [isMirror, setIsMirror] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const startingCameraRef = useRef(false);
 
